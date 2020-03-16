@@ -1,0 +1,69 @@
+version: "3"
+
+services:
+  api:
+      image: python
+      container_name: api
+      
+      logging:
+            driver: "json-file"
+
+      ports:
+          - 8080:8080
+
+      volumes:
+          - /etc/localtime:/etc/localtime:ro
+          - ./src/api.py:/api/src/api.py
+          - ./src/db.py:/api/src/db.py
+          - ./src/date.py:/api/src/date.py
+          - ./data:/api/data
+          - ./configs:/api/configs
+          - ./requirements:/api/requirements
+
+      entrypoint:
+         - /bin/sh
+         - -c
+         - |
+          python3 -m pip install -r /api/requirements/api && python3 /api/src/api.py
+
+      links:
+         - database
+
+  api_refresher:
+      image: python
+      container_name: api_refresher
+      
+      logging:
+            driver: "json-file"
+
+      volumes:
+          - /etc/localtime:/etc/localtime:ro
+          - ./src/refresher.py:/api/src/refresher.py
+          - ./src/db.py:/api/src/db.py
+          - ./data:/api/data
+          - ./configs:/api/configs
+          - ./requirements:/api/requirements
+
+      entrypoint:
+         - /bin/sh
+         - -c
+         - |
+          python3 -m pip install -r /api/requirements/refresher && python3 /api/src/refresher.py
+
+      links:
+         - database
+
+  database:
+      image: mongo
+      container_name: api_db
+
+      volumes:
+          - /etc/localtime:/etc/localtime:ro
+          - ./db:/data/db
+
+      logging:
+            driver: "json-file"
+
+      #environment:
+      #    - MONGO_INITDB_ROOT_USERNAME=root
+      #    - MONGO_INITDB_ROOT_PASSWORD=
