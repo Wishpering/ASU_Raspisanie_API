@@ -171,4 +171,4 @@ class Api:
             return {'token' : token}
 
 if __name__ == '__main__':
-    run("api:Api.app", host = gethostbyname(gethostname()) , port = 8080, log_level = "debug", reload = True)
+    run("api:Api.app", host = gethostbyname(gethostname()) , port = 80, log_level = "debug", reload = True)
