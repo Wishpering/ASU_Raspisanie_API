@@ -9,7 +9,7 @@ services:
             driver: "json-file"
 
       ports:
-          - 8080:8080
+          - 80:80
 
       volumes:
           - /etc/localtime:/etc/localtime:ro
