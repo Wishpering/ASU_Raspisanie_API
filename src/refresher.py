@@ -163,8 +163,9 @@ class Page:
         for record in page:
             record = record.find_all('td')
             para_Cleaned = ''
+            data = None
             
-            # На страничках преподов нужно сдвинуть индекс для нахождения даты пары:)
+            # На страничках преподов нужно сдвинуть индекс для нахождения даты пары :)
             if prep_Page is True:
                 tmp = record[6].find('a', href = True)
             else:
@@ -178,6 +179,10 @@ class Page:
                 data = tmp.replace('/timetable/freerooms/?date=', '').replace('building', '')[0:8]
                 data = str(datetime(int(data[0:4]), int(data[4:6]), int(data[6:8])).date())
             
+            # Иногда на сайте не указана дата, просто пропускаем
+            if data is None:
+                continue
+
             auditoriya = record[4].text.replace('\n', '').rstrip()
             para_Name = record[2].text.replace('\n', '').split(' ')
             time = record[1].text.replace('\n', '').rstrip()
@@ -376,7 +381,9 @@ class Raspisanie:
                         res = await asyncio.gather(*tasks)
 
                     for part in res:
-                        if 'error' in part.keys():
+                        if part is None:
+                            logger.opt(raw = True).debug('Error - payload does\'nt contain any info \n')
+                        elif 'error' in part.keys():
                             logger.opt(raw = True).debug(f'Error - {part.get("error")}' + '\n')
                         else:
                             database.insert(part.get('group'), part.get('payload'))

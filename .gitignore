@@ -2,3 +2,4 @@ db
 logs
 groups
 preps
+__pycache__
