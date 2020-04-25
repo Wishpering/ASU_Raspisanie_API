@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 from os.path import dirname, abspath, exists
 from loguru import logger
 from threading import Thread
-from time import sleep
 from json import loads
 
 from db import Database
@@ -236,7 +235,7 @@ class Raspisanie:
 
             try:
                 if not exists(f'{Path}/data/preps'):
-                    print('File with preps list not found')
+                    logger.critical('File with preps list not found')
                     exit(1)
                 else:
                     with open(f'{Path}/data/preps', 'r') as file:
@@ -249,7 +248,7 @@ class Raspisanie:
 
                 while True:
                     async with aiohttp.ClientSession() as session:
-                        logger.opt(raw = True).debug('started prep rasp refreshing' + '\n')
+                        logger.info('started prep rasp refreshing')
 
                         tasks = [
                             asyncio.create_task(Raspisanie.Prepods.get(faculty, cathedra, prep, session))
@@ -260,11 +259,13 @@ class Raspisanie:
 
                     for part in res:
                         if 'error' in part.keys():
-                            logger.opt(raw = True).debug(f'Error - {part.get("error")}' + '\n')
+                            logger.critical(f'Error - {part.get("error")}')
                         else:
-                            database.insert_Prep(part.get('prep'), part.get('payload'))
+                            await database.insert_Prep(part.get('prep'), part.get('payload'))
 
-                    logger.opt(raw = True).debug(f'sleeping {refresh_Rate}' + '\n')
+                    await database.fsync()
+
+                    logger.info(f'sleeping {refresh_Rate}')
                     await asyncio.sleep(refresh_Rate)
 
             except Exception as error:
@@ -273,6 +274,8 @@ class Raspisanie:
         @classmethod
         async def get(cls, faculty, cathedra, prep, session):
             result = {}
+
+            logger.info(f'Getting prep {prep} rasp')
 
             try:
                 # Находим ID факультета
@@ -343,6 +346,8 @@ class Raspisanie:
                 if this_Week == -10 and next_Week == -10:
                     return {'error': f'Не нашел расписания для {prep}'}
 
+                logger.info(f'Rasp for prep {prep} is ready')
+
                 return {
                     'prep' : prep,
                     'payload': result
@@ -359,7 +364,7 @@ class Raspisanie:
 
             try:
                 if not exists(f'{Path}/data/groups'):
-                    print('File with groups list not found')
+                    logger.critical('File with groups list not found')
                     exit(1)
                 else:
                     with open(f'{Path}/data/groups', 'r') as file:
@@ -371,7 +376,7 @@ class Raspisanie:
 
                 while True:
                     async with aiohttp.ClientSession() as session:
-                        logger.opt(raw = True).debug('started groups rasp refreshing' + '\n')
+                        logger.info('started groups rasp refreshing')
                 
                         tasks = [
                             asyncio.create_task(Raspisanie.Groups.get(group, faculty, session))
@@ -382,13 +387,15 @@ class Raspisanie:
 
                     for part in res:
                         if part is None:
-                            logger.opt(raw = True).debug('Error - payload does\'nt contain any info \n')
+                            logger.critical('Error - payload does\'nt contain any info')
                         elif 'error' in part.keys():
-                            logger.opt(raw = True).debug(f'Error - {part.get("error")}' + '\n')
+                            logger.critical(f'Error - {part.get("error")}')
                         else:
-                            database.insert(part.get('group'), part.get('payload'))
+                            await database.insert(part.get('group'), part.get('payload'))
 
-                    logger.opt(raw = True).debug(f'sleeping {refresh_Rate}' + '\n')
+                    await database.fsync()
+
+                    logger.info(f'sleeping {refresh_Rate}')
                     await asyncio.sleep(refresh_Rate)
 
             except Exception as error:
@@ -398,7 +405,7 @@ class Raspisanie:
         async def get(cls, group, faculty, session):
             result = {}
 
-            logger.opt(raw = True).debug(f'Refreshing group {group} on {datetime.now()}' + '\n')
+            logger.info(f'Refreshing group {group} on {datetime.now()}')
 
             try:
                 # Находим ID факультета
@@ -442,12 +449,12 @@ class Raspisanie:
                 this_Week = Page.parse(this_Week, False)
                 next_Week = Page.parse(next_Week, False)
 
-                logger.opt(raw = True).debug(
-                    f'THIS WEEK GROUP={group}------------------------------ ' + '\n' + '\n' 
-                    + str(this_Week) + '\n' + '\n' +
-                    f'NEXT WEEK GROUP={group}------------------------------ ' + '\n' + '\n' 
-                    + str(next_Week) + '\n' + '\n'
-                )
+                # logger.debug(
+                #     f'THIS WEEK GROUP={group}------------------------------ ' + '\n' + '\n' 
+                #     + str(this_Week) + '\n' + '\n' +
+                #     f'NEXT WEEK GROUP={group}------------------------------ ' + '\n' + '\n' 
+                #     + str(next_Week) + '\n' + '\n'
+                # )
 
                 # Если парсер нашел нужное в страничках, то записываем их в переменные
                 if this_Week != -10:
@@ -456,6 +463,8 @@ class Raspisanie:
                     result.update(next_Week)
                 if this_Week == -10 and next_Week == -10:
                     return {'error': f'Не нашел расписания для {group} группы'}
+
+                logger.info(f'Rasp for group {group} refreshed on {datetime.now()}')
 
                 return {
                     'group' : group,
@@ -467,10 +476,10 @@ class Raspisanie:
 
 if __name__ == '__main__':
     Path = str(dirname(abspath(__file__))).rsplit('/', 1)[0]
-    logger.add(f'{Path}/logs/log.log', colorize = True, backtrace = True, diagnose = True, format = '{time} {message}', level = 'DEBUG')
+    logger.add(f'{Path}/logs/log.log', backtrace = True, diagnose = True, format = '{time} {message}', level = 'DEBUG')
 
     with open(f'{Path}/configs/config.json', 'r') as config:
         cfg = loads(config.read())
         
-    db = Database(user = cfg['DB']['login'], passwd = cfg['DB']['password'])
+    db = Database(Loop.loop, user = cfg['DB']['login'], passwd = cfg['DB']['password'])
     asyncio.run_coroutine_threadsafe(Raspisanie.init(Path, db, cfg['Refresher']['refresh_rate']), Loop.loop).result()
