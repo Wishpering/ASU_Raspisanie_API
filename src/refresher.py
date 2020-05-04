@@ -296,7 +296,7 @@ class Raspisanie:
                     faculty_Page = await Page.download(Raspisanie.prep_Link, session)
 
                     if faculty_Page == None:
-                        return {'error': 'Не удалось скачать страницу с факультетами'}
+                        return {'error': f'Не удалось скачать страницу с факультетами - {faculty}, {cathedra}, {prep}'}
 
                     faculty_ID = Page.find_Faculty_ID(faculty_Page, faculty)
 
@@ -313,7 +313,7 @@ class Raspisanie:
                     cathedra_Page = await Page.download(f'{Raspisanie.prep_Link}{faculty_ID}', session)
 
                     if cathedra_Page == None:
-                        return {'error': 'Не удалось скачать страницу с кафедрами'}
+                        return {'error': f'Не удалось скачать страницу с кафедрами - {faculty}, {cathedra}, {prep}'}
 
                     cathedra_ID = Page.find_Cathedra_ID(cathedra_Page, cathedra)
 
@@ -329,7 +329,7 @@ class Raspisanie:
                     preps_Page = await Page.download(f'{Raspisanie.prep_Link}{faculty_ID}/{cathedra_ID}', session)
 
                     if preps_Page is None:
-                        return {'error': 'Не удалось скачать страницу с преподавателями'}
+                        return {'error': f'Не удалось скачать страницу с преподавателями - {faculty}, {cathedra}, {prep}'}
 
                     prep_ID = Page.find_Prep_ID(preps_Page, prep)
 
@@ -393,6 +393,7 @@ class Raspisanie:
                         resolver = dns_Resolver, family = AF_INET, 
                         force_close = True
                     ) as connector:
+                    
                         async with aiohttp.ClientSession(connector = connector) as session:
                             logger.info('started groups rasp refreshing')
                 
@@ -432,7 +433,7 @@ class Raspisanie:
                 if Raspisanie.cache.get(faculty) is None:
                     faculty_Page = await Page.download(Raspisanie.groups_Link, session)
                     if faculty_Page == None:
-                        return {'error': 'Не удалось скачать страницу с факультетами'}
+                        return {'error': f'Не удалось скачать страницу с факультетами - {faculty}, {group}'}
 
                     faculty_ID = Page.find_Faculty_ID(faculty_Page, faculty)
                     if faculty_ID == None:
@@ -446,7 +447,7 @@ class Raspisanie:
                 if Raspisanie.cache.get(group) is None:
                     group_Page = await Page.download(f'{Raspisanie.groups_Link}{faculty_ID}', session)
                     if group_Page == None:
-                        return {'error': 'Не удалось скачать страницу с расписанием групп'}
+                        return {'error': f'Не удалось скачать страницу с расписанием групп - {faculty}, {group}'}
 
                     # Ищем нужную группу на странице
                     group_ID = Page.find_Group_ID(group_Page, group)
