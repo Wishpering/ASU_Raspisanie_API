@@ -60,7 +60,7 @@ class Page:
             res = line.find('a', href = True)
 
             if faculty in res.text.lower():
-                return res["href"].replace("/", "")
+                return res['href'].replace('/', '')
 
     @classmethod
     def find_Prep_ID(cls, page, prep) -> str:
@@ -79,7 +79,7 @@ class Page:
                 search_Res = line.find('a', href = True)
 
                 if prep in search_Res.text.lower().split(',')[0]:
-                    return search_Res["href"]
+                    return search_Res['href']
 
     @classmethod
     def find_Cathedra_ID(cls, page, cathedra) -> str:
@@ -118,7 +118,7 @@ class Page:
                 search_Res = line.find('a', href = True)
 
                 if group == search_Res.text.lower():
-                    return search_Res["href"]
+                    return search_Res['href']
 
     @classmethod
     async def download_Rasp(cls, link_For_Rasp, session):
@@ -218,7 +218,6 @@ class Raspisanie:
     # Страница с ссылками на все факультеты
     groups_Link = 'http://www.asu.ru/timetable/students'
     prep_Link = 'http://www.asu.ru/timetable/lecturers'
-    cache = {}
 
     @classmethod
     async def init(cls, Path, database, refresh_Rate):
@@ -260,7 +259,8 @@ class Raspisanie:
             faculties = []
             cathedras = []
             preps = []
-
+            tasks = []
+            
             try:
                 if not exists(f'{Path}/data/preps'):
                     logger.critical('File with preps list not found')
@@ -278,13 +278,13 @@ class Raspisanie:
                 logger.info('getting links for preps')
 
                 # Вытаскиваем IDшники
-                Raspisanie.cache.update(await Raspisanie.Prepods.get_IDs(session, faculties, cathedras))
+                Raspisanie.Prepods.cache = await Raspisanie.Prepods.get_IDs(session, faculties, cathedras)
 
                 logger.info('started prep rasp refreshing')
 
                 for faculty, cathedra, prep in zip(faculties, cathedras, preps):
-                    cathedra = Raspisanie.cache.get(cathedra)
-                    faculty = Raspisanie.cache.get(faculty)
+                    cathedra = Raspisanie.Prepods.cache.get(cathedra)
+                    faculty = Raspisanie.Prepods.cache.get(faculty)
 
                     if faculty is None:
                         logger.critical(f'Не нашел ID факультета - {faculty}')
@@ -293,11 +293,11 @@ class Raspisanie:
                         logger.critical(f'Не нашел ID кафедры - {cathedra}')
                         continue
                                 
-                    tasks = [
+                    tasks.append(
                         asyncio.create_task(
                             Raspisanie.Prepods.get(faculty, cathedra, prep, session, generator.uniform(0, 10))
                         )
-                    ]
+                    )
 
                 res = await asyncio.gather(*tasks)
 
@@ -324,13 +324,13 @@ class Raspisanie:
                     faculty_Page = await Page.download(Raspisanie.prep_Link, session)
 
                     if faculty_Page == None:
-                        logger.debug('doesnt get faculty page')
+                        logger.debug('Не удалось скачать страницу с факультетами - {faculty}')
                         continue
 
                     faculty_ID = Page.find_Faculty_ID(faculty_Page, faculty)
 
                     if faculty_ID == None:
-                        logger.debug('doesnt find faculty id')
+                        logger.debug('Не удалось найти ID факультета - {faculty}')
                         continue
                     else:
                         result[faculty] = faculty_ID
@@ -365,7 +365,7 @@ class Raspisanie:
             logger.info(f'Getting prep {prep} rasp')
 
             try:
-                if Raspisanie.cache.get(prep) is None:
+                if Raspisanie.Prepods.cache.get(prep) is None:
                     preps_Page = await Page.download(f'{Raspisanie.prep_Link}/{faculty}/{cathedra}', session)
 
                     if preps_Page is None:
@@ -376,9 +376,9 @@ class Raspisanie:
                     if prep_ID == None:
                         return {'error': f'Не удалось найти указанного преподавателя - {prep}'}
                     else:
-                        Raspisanie.cache[prep] = prep_ID
+                        Raspisanie.Prepods.cache[prep] = prep_ID
                 else:
-                    prep_ID = Raspisanie.cache.get(prep)
+                    prep_ID = Raspisanie.Prepods.cache(prep)
 
                 link = f'{Raspisanie.prep_Link}/{faculty}/{cathedra}/{prep_ID}'
 
@@ -410,10 +410,13 @@ class Raspisanie:
                 logger.exception(error)
 
     class Groups:
+        cache = {}
+        
         @classmethod
         async def refresher(cls, Path, database, session, generator):
             groups = []
             faculties = []
+            tasks = []
 
             try:
                 if not exists(f'{Path}/data/groups'):
@@ -429,22 +432,22 @@ class Raspisanie:
 
                 logger.info('getting links for groups')
 
-                Raspisanie.cache.update(await Raspisanie.Groups.get_IDs(faculties, session))
+                Raspisanie.Groups.cache = await Raspisanie.Groups.get_IDs(faculties, session)
                             
                 logger.info('started groups rasp refreshing')
 
                 for group, faculty in zip(groups, faculties):
-                    faculty = Raspisanie.cache.get(faculty)
+                    faculty = Raspisanie.Groups.cache.get(faculty)
                                 
                     if faculty is None:
                         logger.debug(f'Не удалось найти ID факультета - {faculty}')
                         continue
                                 
-                    tasks = [
+                    tasks.append(
                         asyncio.create_task(
                             Raspisanie.Groups.get(group, faculty, session, generator.uniform(0, 10))
                         )
-                    ]
+                    )
 
                 res = await asyncio.gather(*tasks)
 
@@ -495,7 +498,7 @@ class Raspisanie:
 
             try:
                 # Находим ID группы
-                if Raspisanie.cache.get(group) is None:
+                if Raspisanie.Groups.cache.get(group) is None:
                     group_Page = await Page.download(f'{Raspisanie.groups_Link}/{faculty}', session)
                     if group_Page == None:
                         return {'error': f'Не удалось скачать страницу с расписанием групп - {faculty}, {group}'}
@@ -505,9 +508,9 @@ class Raspisanie:
                     if group_ID == None:
                         return {'error': f'Не удалось найти указанную группу - {group}'}
                     else:
-                        Raspisanie.cache[group] = group_ID
+                        Raspisanie.Groups.cache[group] = group_ID
                 else:
-                    group_ID = Raspisanie.cache.get(group)
+                    group_ID = Raspisanie.Groups.cache.get(group)
 
                 # Получаем готовую ссылку на нужную группу
                 link = f'{Raspisanie.groups_Link}/{faculty}/{group_ID}'
@@ -520,13 +523,6 @@ class Raspisanie:
                 # Парсим полученные странички
                 this_Week = Page.parse(this_Week, False)
                 next_Week = Page.parse(next_Week, False)
-
-                # logger.debug(
-                #     f'THIS WEEK GROUP={group}------------------------------ ' + '\n' + '\n' 
-                #     + str(this_Week) + '\n' + '\n' +
-                #     f'NEXT WEEK GROUP={group}------------------------------ ' + '\n' + '\n' 
-                #     + str(next_Week) + '\n' + '\n'
-                # )
 
                 # Если парсер нашел нужное в страничках, то записываем их в переменные
                 if this_Week != -10:
