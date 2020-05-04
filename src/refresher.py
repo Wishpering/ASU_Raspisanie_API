@@ -2,19 +2,22 @@
 
 import asyncio
 import aiohttp
+from aiohttp.resolver import AsyncResolver
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 from os.path import dirname, abspath, exists
 from loguru import logger
 from threading import Thread
 from json import loads
+from random import SystemRandom
+from socket import AF_INET
 
 from db import Database
 
 headers = {
     'Referer' : 'google.com',
     'Host' : 'www.asu.ru',
-    'Connection' : 'close',
+    'Connection' : 'keep-alive',
     'Cache-Control' : 'max-age=0',
     'Upgrade-Insecure-Requests' : '1',
     'User-Agent' : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.88 Safari/537.36',
@@ -221,14 +224,17 @@ class Raspisanie:
     async def init(cls, Path, database, refresh_Rate):
         tasks = []
 
-        tasks.append(asyncio.create_task(Raspisanie.Prepods.refresher(Path, database, refresh_Rate)))
-        tasks.append(asyncio.create_task(Raspisanie.Groups.refresher(Path, database, refresh_Rate)))
+        resolver = AsyncResolver(nameservers = ['8.8.8.8', '1.1.1.1'])
+        generator = SystemRandom()
+
+        tasks.append(asyncio.create_task(Raspisanie.Prepods.refresher(Path, database, refresh_Rate, resolver, generator)))
+        tasks.append(asyncio.create_task(Raspisanie.Groups.refresher(Path, database, refresh_Rate, resolver, generator)))
 
         await asyncio.gather(*tasks)
 
     class Prepods:
         @classmethod
-        async def refresher(cls, Path, database, refresh_Rate):
+        async def refresher(cls, Path, database, refresh_Rate, dns_Resolver, generator):
             faculties = []
             cathedra = []
             preps = []
@@ -247,15 +253,20 @@ class Raspisanie:
                             preps.append(line[2].lower())
 
                 while True:
-                    async with aiohttp.ClientSession() as session:
-                        logger.info('started prep rasp refreshing')
+                    async with aiohttp.TCPConnector(
+                        limit = None, ttl_dns_cache = 300, 
+                        resolver = dns_Resolver, family = AF_INET, 
+                        force_close = True
+                    ) as connector:        
+                        async with aiohttp.ClientSession(connector = connector) as session:
+                            logger.info('started prep rasp refreshing')
 
-                        tasks = [
-                            asyncio.create_task(Raspisanie.Prepods.get(faculty, cathedra, prep, session))
-                            for faculty, cathedra, prep in zip(faculties, cathedra, preps)
-                        ]
+                            tasks = [
+                                asyncio.create_task(Raspisanie.Prepods.get(faculty, cathedra, prep, session, generator.uniform(0, 10)))
+                                for faculty, cathedra, prep in zip(faculties, cathedra, preps)
+                            ]
 
-                        res = await asyncio.gather(*tasks)
+                            res = await asyncio.gather(*tasks)
 
                     for part in res:
                         if 'error' in part.keys():
@@ -272,8 +283,10 @@ class Raspisanie:
                 logger.exception(error)
 
         @classmethod
-        async def get(cls, faculty, cathedra, prep, session):
+        async def get(cls, faculty, cathedra, prep, session, delay):
             result = {}
+
+            await asyncio.sleep(delay)
 
             logger.info(f'Getting prep {prep} rasp')
 
@@ -358,7 +371,7 @@ class Raspisanie:
 
     class Groups:
         @classmethod
-        async def refresher(cls, Path, database, refresh_Rate):
+        async def refresher(cls, Path, database, refresh_Rate, dns_Resolver, generator):
             groups = []
             faculties = []
 
@@ -375,15 +388,20 @@ class Raspisanie:
                             groups.append(line[1].lower())
 
                 while True:
-                    async with aiohttp.ClientSession() as session:
-                        logger.info('started groups rasp refreshing')
+                    async with aiohttp.TCPConnector(
+                        limit = None, ttl_dns_cache = 300, 
+                        resolver = dns_Resolver, family = AF_INET, 
+                        force_close = True
+                    ) as connector:
+                        async with aiohttp.ClientSession(connector = connector) as session:
+                            logger.info('started groups rasp refreshing')
                 
-                        tasks = [
-                            asyncio.create_task(Raspisanie.Groups.get(group, faculty, session))
-                            for group, faculty in zip(groups, faculties)
-                        ]
+                            tasks = [
+                                asyncio.create_task(Raspisanie.Groups.get(group, faculty, session, generator.uniform(0, 10)))
+                                for group, faculty in zip(groups, faculties)
+                            ]
 
-                        res = await asyncio.gather(*tasks)
+                            res = await asyncio.gather(*tasks)
 
                     for part in res:
                         if part is None:
@@ -402,9 +420,11 @@ class Raspisanie:
                 logger.exception(error)
 
         @classmethod
-        async def get(cls, group, faculty, session):
+        async def get(cls, group, faculty, session, delay):
             result = {}
 
+            await asyncio.sleep(delay)
+            
             logger.info(f'Refreshing group {group} on {datetime.now()}')
 
             try:
