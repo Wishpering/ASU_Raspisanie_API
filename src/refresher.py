@@ -17,7 +17,7 @@ from db import Database
 headers = {
     'Referer' : 'google.com',
     'Host' : 'www.asu.ru',
-    'Connection' : 'keep-alive',
+    'Connection' : 'close',
     'Cache-Control' : 'max-age=0',
     'Upgrade-Insecure-Requests' : '1',
     'User-Agent' : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.88 Safari/537.36',
@@ -362,14 +362,14 @@ class Raspisanie:
 
             await asyncio.sleep(delay)
 
-            logger.info(f'Getting prep {prep} rasp')
+            logger.info(f'Getting prep {prep} rasp, delay - {delay} seconds')
 
             try:
                 if Raspisanie.Prepods.cache.get(prep) is None:
                     preps_Page = await Page.download(f'{Raspisanie.prep_Link}/{faculty}/{cathedra}', session)
 
                     if preps_Page is None:
-                        return {'error': f'Не удалось скачать страницу с преподавателями - {faculty}, {cathedra}, {prep}'}
+                        return {'error': f'Не удалось скачать страницу с преподавателями - {prep}'}
 
                     prep_ID = Page.find_Prep_ID(preps_Page, prep)
 
@@ -494,14 +494,14 @@ class Raspisanie:
 
             await asyncio.sleep(delay)
             
-            logger.info(f'Refreshing group {group} on {datetime.now()}')
+            logger.info(f'Refreshing group {group} on {datetime.now()}, delay - {delay} seconds')
 
             try:
                 # Находим ID группы
                 if Raspisanie.Groups.cache.get(group) is None:
                     group_Page = await Page.download(f'{Raspisanie.groups_Link}/{faculty}', session)
                     if group_Page == None:
-                        return {'error': f'Не удалось скачать страницу с расписанием групп - {faculty}, {group}'}
+                        return {'error': f'Не удалось скачать страницу с расписанием групп - {group}'}
 
                     # Ищем нужную группу на странице
                     group_ID = Page.find_Group_ID(group_Page, group)

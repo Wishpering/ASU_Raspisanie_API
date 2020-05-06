@@ -125,7 +125,7 @@ class Database:
             await self.db_Client.fsync(**Database.options)
 
     async def check_Token(self, token):
-        if await self.tokens.count_documents({'token' : token}) >= 1:
+        if await self.tokens.count_documents({'token' : token}) == 1:
             return True
         else:
             return False

@@ -1,4 +1,4 @@
-version: "3"
+version: "2.3"
 
 services:
   api:
@@ -8,26 +8,33 @@ services:
       logging:
             driver: "json-file"
 
+      healthcheck:
+            test: curl -f http://api/test
+            interval: 60s
+            timeout: 10s
+            retries: 5
+            start_period: 60s
+
       ports:
           - 80:80
 
       volumes:
           - /etc/localtime:/etc/localtime:ro
+          - ./data:/api/data
+          - ./configs:/api/configs
+          - ./requirements/api:/api/requirements.txt
           - ./src/api.py:/api/src/api.py
           - ./src/db.py:/api/src/db.py
           - ./src/date.py:/api/src/date.py
-          - ./data:/api/data
-          - ./configs:/api/configs
-          - ./requirements:/api/requirements
 
       entrypoint:
-         - /bin/sh
-         - -c
-         - |
-          python3 -m pip install -r /api/requirements/api && python3 /api/src/api.py
+          - /bin/sh
+          - -c
+          - |
+           python3 -m pip install -r /api/requirements.txt && python3 /api/src/api.py
 
       links:
-         - database
+          - database
 
   api_refresher:
       image: python
@@ -38,20 +45,20 @@ services:
 
       volumes:
           - /etc/localtime:/etc/localtime:ro
-          - ./src/refresher.py:/api/src/refresher.py
-          - ./src/db.py:/api/src/db.py
           - ./data:/api/data
           - ./configs:/api/configs
-          - ./requirements:/api/requirements
+          - ./requirements/refresher:/api/requirements.txt
+          - ./src/refresher.py:/api/src/refresher.py
+          - ./src/db.py:/api/src/db.py
 
       entrypoint:
-         - /bin/sh
-         - -c
-         - |
-          python3 -m pip install -r /api/requirements/refresher && python3 /api/src/refresher.py
+          - /bin/sh
+          - -c
+          - |
+           python3 -m pip install -r /api/requirements.txt && python3 /api/src/refresher.py
 
       links:
-         - database
+          - database
 
   database:
       image: mongo
@@ -64,6 +71,13 @@ services:
       logging:
             driver: "json-file"
 
+      healthcheck:
+            test: echo 'db.runCommand("ping").ok' | mongo database:27017 --quiet
+            interval: 60s
+            timeout: 10s
+            retries: 5
+            start_period: 60s
+
       #environment:
       #    - MONGO_INITDB_ROOT_USERNAME=root
-      #    - MONGO_INITDB_ROOT_PASSWORD=
+      #    - MONGO_INITDB_ROOT_PASSWORD=password_will_be_here

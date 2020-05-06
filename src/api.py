@@ -18,27 +18,32 @@ class Api:
     link_To_DB = None
     password = None
     
-    @app.on_event("startup")
+    @app.on_event('startup')
     async def on_Startup():
         Path = str(dirname(abspath(__file__))).rsplit('/', 1)[0]
         
-        logger.add(f'{Path}/logs/log.log', colorize = True, backtrace = True, diagnose = True, format = '{time} {message}', level = 'DEBUG')
+        logger.add(
+            f'{Path}/logs/log.log', colorize = True, 
+            backtrace = True, diagnose = True, 
+            format = '{time} {message}', level = 'DEBUG'
+        )
 
         with open(f'{Path}/configs/config.json', 'r') as config:
             cfg = loads(config.read())
         
         Api.password = cfg['Api']['password']
-        Api.link_To_DB = Database(asyncio.get_running_loop(), user = cfg['DB']['login'], passwd = cfg['DB']['password'])
-        
-    @app.get("/")
-    async def root(authorization: str = Header(None)):
-        # Проверяем токен из headers
-        if authorization is None or await Api.link_To_DB.check_Token(authorization) != True:
-            raise HTTPException(status_code = 401, detail = 'you are not welcome here')
-        else: 
-            return {'payload' : 'Nothing here'}
 
-    @app.get("/rasp")
+        Api.link_To_DB = Database(
+            asyncio.get_running_loop(), 
+            user = cfg['DB']['login'], 
+            passwd = cfg['DB']['password']
+        )
+        
+    @app.get('/test')
+    async def root():
+        return {'payload' : 'Nothing here'}
+
+    @app.get('/rasp')
     async def get_Rasp(prep : str = None, group : str = None, date : str = None, end_date : str = None, authorization: str = Header(None)):
         # Проверяем токен из headers
         if authorization is None or await Api.link_To_DB.check_Token(authorization) != True:
@@ -172,4 +177,4 @@ class Api:
             return {'token' : token}
 
 if __name__ == '__main__':
-    run("api:Api.app", host = gethostbyname(gethostname()) , port = 80, log_level = "debug", reload = True)
+    run('api:Api.app', host = gethostbyname(gethostname()) , port = 80, log_level = 'debug', reload = True)
