@@ -152,6 +152,9 @@ class Page:
         prev_Time = ''
 
         try:
+            if page is None:
+                return -10
+
             soup = BeautifulSoup(page, 'lxml')
 
             # На страничках преподов класс называется чуть иначе :)
