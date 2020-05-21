@@ -4,6 +4,8 @@ services:
   api:
       image: python
       container_name: api
+
+      restart: on-failure
       
       logging:
             driver: "json-file"
@@ -42,6 +44,8 @@ services:
   api_refresher:
       image: python
       container_name: api_refresher
+
+      restart: on-failure
       
       logging:
             driver: "json-file"
@@ -69,6 +73,8 @@ services:
   database:
       image: mongo
       container_name: api_db
+
+      restart: on-failure
 
       volumes:
           - /etc/localtime:/etc/localtime:ro
