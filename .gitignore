@@ -1,5 +1,6 @@
-db
+db_data
 logs
 groups
 preps
 __pycache__
+bin
