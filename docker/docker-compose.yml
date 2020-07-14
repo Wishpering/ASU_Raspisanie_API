@@ -59,7 +59,7 @@ services:
       image: mongo
       container_name: api_db
 
-      restart: on-failure
+      restart: always
 
       volumes:
           - /etc/localtime:/etc/localtime:ro
