@@ -26,6 +26,7 @@ go:
 deps:
 	go get -v go.mongodb.org/mongo-driver/mongo
 	go get -v github.com/valyala/fasthttp
+	go get -v github.com/AubSs/fasthttplogger
 img:
 	docker build -t api_refresher_img:latest -f docker/img/api_refresher ./src
 distclean:

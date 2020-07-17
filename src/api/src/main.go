@@ -4,7 +4,8 @@ import (
        "github.com/valyala/fasthttp"
        "go.mongodb.org/mongo-driver/bson"
        "go.mongodb.org/mongo-driver/bson/primitive"
-       
+       "github.com/AubSs/fasthttplogger"
+
        "flag"
        "encoding/json"
        "crypto/rand"
@@ -335,7 +336,7 @@ func main() {
 	handler = fasthttp.CompressHandler(handler)
      }
 
-     if err := fasthttp.ListenAndServe(cfg.Port, handler); err != nil {
+     if err := fasthttp.ListenAndServe(cfg.Port, fasthttplogger.Combined(handler)); err != nil {
 	panic(fmt.Sprintf("Error in ListenAndServe: %s", err))
      }    
 }
