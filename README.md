@@ -28,7 +28,7 @@ git clone https://github.com/Wishpering/asu_rasp_api.git
         - Authorization:password = пароль из файла config.json, предназначенный для генерации токена <br />
 
 Запрос для получения расписания группы<br />
-    - http://server/rasp/group<br />
+    - http://server/rasp/groups<br />
     - Headers:<br />
         - Authorization:token <br >
     - Параметры:<br />
@@ -37,7 +37,7 @@ git clone https://github.com/Wishpering/asu_rasp_api.git
         - end_date = дата, до которой будет проверяться расписание. Формат - yy:mm:dd.<br />
 
 Запрос для получения расписания преподавателя<br />
-    - http://server/rasp/prep<br />
+    - http://server/rasp/preps<br />
     - Headers:<br />
         - Authorization:token <br >
     - Параметры:<br />
@@ -46,12 +46,12 @@ git clone https://github.com/Wishpering/asu_rasp_api.git
         - end_date = дата, до которой будет проверяться расписание. Формат - yy:mm:dd.<br />
 
 Запрос для получения списка групп<br />
-    - http://server/rasp/group/pool<br />
+    - http://server/pool/groups<br />
     - Headers:<br />
         - Authorization:token <br >
 
 Запрос для получения списка преподавателей<br />
-    - http://server/rasp/group/pool<br />
+    - http://server/pool/preps<br />
     - Headers:<br />
         - Authorization:token <br >
 
