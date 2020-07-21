@@ -284,6 +284,16 @@ func token_endpoint(ctx *fasthttp.RequestCtx) {
      }
 }
 
+func token_check_endpoint(ctx *fasthttp.RequestCtx) {
+     auth := string(ctx.Request.Header.Peek("Authorization"))
+     if db.check_token(auth) != 1 {
+     	ctx.Response.SetStatusCode(401)
+	return
+     } else {
+        ctx.Response.SetStatusCode(200)
+     }
+}
+
 func test_endpoint(ctx *fasthttp.RequestCtx) {
      ctx.SetContentType("text/plain; charset=utf8")
      fmt.Fprintf(ctx, "OK!")
@@ -317,13 +327,15 @@ func main() {
      	     switch string(ctx.Path()) {
 	     	    case "/token":
 		    	token_endpoint(ctx)
-		    case "/rasp/group":
+		    case "/token/check":
+		    	token_check_endpoint(ctx)
+		    case "/rasp/groups":
 		    	 groups_endpoint(ctx)
-		    case "/rasp/prep":
+		    case "/rasp/preps":
 		    	 preps_endpoint(ctx)
-		    case "/rasp/prep/pool":
+		    case "/pool/preps":
 		    	prep_pool_endpoint(ctx)
-		    case "/rasp/group/pool":
+		    case "/pool/groups":
 		    	groups_pool_endpoint(ctx)
 		    case "/test":
 			test_endpoint(ctx)

@@ -28,7 +28,7 @@ deps:
 	go get -v github.com/valyala/fasthttp
 	go get -v github.com/AubSs/fasthttplogger
 img:
-	docker build -t api_refresher_img:latest -f docker/img/api_refresher ./src
+	docker build -t api_refresher_img:latest -f docker/img/api_refresher ./src/refresher
 distclean:
 	rm -rvf src/api/bin
 clean:

@@ -2,8 +2,8 @@ FROM python:3.8.3-alpine3.12
 
 RUN apk add --no-cache libxml2-dev libxslt-dev gcc musl-dev libffi-dev
 
-COPY ./refresher /refresher
 WORKDIR /refresher
+COPY ./ ./
 
 RUN pip install -r requirements.txt
 
