@@ -3,9 +3,13 @@ FROM python:3.8.3-alpine3.12
 RUN apk add --no-cache libxml2-dev libxslt-dev gcc musl-dev libffi-dev
 
 WORKDIR /refresher
-COPY ./ ./
+COPY ./requirements.txt ./
 
 RUN pip install -r requirements.txt
+
+COPY configs ./configs
+COPY data ./data
+COPY src ./src
 
 WORKDIR /refresher/src
 CMD ["python3", "refresher.py"]
