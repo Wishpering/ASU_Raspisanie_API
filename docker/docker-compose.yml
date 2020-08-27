@@ -2,7 +2,7 @@ version: "2.3"
 
 services:
   api:
-      image: alpine
+      image: api_img
       container_name: api
 
       restart: on-failure
@@ -25,14 +25,12 @@ services:
 
       volumes:
           - /etc/localtime:/etc/localtime:ro
-          - ../src/api/bin/api:/api
 
       entrypoint:
           - /bin/sh
           - -c
           - |
-           apk add --no-cache libc6-compat && \
-           ./api --db-address $DB_ADDRESS --db-port $DB_PORT --port :8080 --passwd $API_PASSWD --compress
+           /api/bin --db-address $DB_ADDRESS --db-port $DB_PORT --port :8080 --passwd $API_PASSWD --compress
 
       links:
           - database
