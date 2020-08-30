@@ -30,7 +30,7 @@
 				"header": [
 					{
 						"key": "Authorization",
-						"value": "123",
+						"value": "",
 						"type": "text"
 					}
 				],
@@ -54,7 +54,7 @@
 				"header": [
 					{
 						"key": "Authorization",
-						"value": "7632b3441ec83759bfe4",
+						"value": "",
 						"type": "text"
 					}
 				],
@@ -79,12 +79,12 @@
 				"header": [
 					{
 						"key": "Authorization",
-						"value": "169a845d6eff1d0126f5",
+						"value": "",
 						"type": "text"
 					}
 				],
 				"url": {
-					"raw": "localhost:8080/pool/groups",
+					"raw": "localhost:8080/pool/groups?faculty=",
 					"host": [
 						"localhost"
 					],
@@ -92,36 +92,11 @@
 					"path": [
 						"pool",
 						"groups"
-					]
-				}
-			},
-			"response": []
-		},
-		{
-			"name": "get all rasp ",
-			"request": {
-				"method": "GET",
-				"header": [
-					{
-						"key": "Authorization",
-						"value": "169a845d6eff1d0126f5",
-						"type": "text"
-					}
-				],
-				"url": {
-					"raw": "localhost:8080/rasp/groups?id=575",
-					"host": [
-						"localhost"
-					],
-					"port": "8080",
-					"path": [
-						"rasp",
-						"groups"
 					],
 					"query": [
 						{
-							"key": "id",
-							"value": "575"
+							"key": "faculty",
+							"value": ""
 						}
 					]
 				}
@@ -136,11 +111,11 @@
 					{
 						"key": "Authorization",
 						"type": "text",
-						"value": "169a845d6eff1d0126f5"
+						"value": ""
 					}
 				],
 				"url": {
-					"raw": "localhost:8080/rasp/groups?id=575&date=2020-05-20&end_date=2020-05-23",
+					"raw": "localhost:8080/rasp/groups?id=&faculty=&date=&end_date=",
 					"host": [
 						"localhost"
 					],
@@ -152,15 +127,19 @@
 					"query": [
 						{
 							"key": "id",
-							"value": "575"
+							"value": ""
+						},
+						{
+							"key": "faculty",
+							"value": ""
 						},
 						{
 							"key": "date",
-							"value": "2020-05-20"
+							"value": ""
 						},
 						{
 							"key": "end_date",
-							"value": "2020-05-23"
+							"value": ""
 						}
 					]
 				}

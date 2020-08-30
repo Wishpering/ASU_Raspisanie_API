@@ -27,12 +27,18 @@ func groups_endpoint(ctx *fasthttp.RequestCtx) {
 		strApplicationJSON = []byte("application/json")
 	)
 
-	auth := ctx.Request.Header.Peek("Authorization")
+	auth := string(ctx.Request.Header.Peek("Authorization"))
 
 	if resp, err := db.CheckToken(auth); err != nil {
 		ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
 	} else if resp != 1 {
 		ctx.Response.SetStatusCode(401)
+		return
+	}
+
+	faculty := string(ctx.QueryArgs().Peek("faculty"))
+	if faculty == "" {
+		ctx.Response.SetStatusCode(400)
 		return
 	}
 	
@@ -42,7 +48,7 @@ func groups_endpoint(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	rasp, err := db.Search(group_id)
+	rasp, err := db.Search(faculty, group_id)
 	if err != nil {
 		ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
 	}
@@ -64,8 +70,7 @@ func groups_endpoint(ctx *fasthttp.RequestCtx) {
 
 		date_parsed = date_parsed.In(time.Local)
 
-		tmp := rasp[date_parsed.Format("2006-01-02")]
-		if tmp != nil {
+		if tmp := rasp[date_parsed.Format("2006-01-02")]; tmp != nil {
 			json_obj, err = json.Marshal(tmp)
 			if err != nil {
 				ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
@@ -74,11 +79,19 @@ func groups_endpoint(ctx *fasthttp.RequestCtx) {
 			ctx.Response.SetStatusCode(404)
 			return
 		}
-	} else if date != "" && end_date != "" {
-		date_parsed, err := time.Parse("2006-01-02", date)
-		if err != nil {
-			ctx.Response.SetStatusCode(400)
-			return
+	} else if (date != "" && end_date != "") || (date == "" && end_date != "") {
+		var date_parsed time.Time
+		
+		if date == "" {
+			t := time.Now()
+			date_parsed = time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+		} else {
+			if t, err := time.Parse("2006-01-02", date); err != nil {
+				ctx.Response.SetStatusCode(400)
+				return
+			} else {
+				date_parsed = t
+			}
 		}
 
 		end_parsed, err := time.Parse("2006-01-02", end_date)
@@ -89,14 +102,13 @@ func groups_endpoint(ctx *fasthttp.RequestCtx) {
 
 		date_parsed = date_parsed.In(time.Local)
 		end_parsed = end_parsed.In(time.Local)
-
+		
 		res := make(map[string]primitive.M)
 
 		for date_parsed := date_parsed; date_parsed.After(end_parsed) == false; date_parsed = date_parsed.AddDate(0, 0, 1) {
 			d_now := date_parsed.Format("2006-01-02")
-			tmp := rasp[d_now]
 
-			if tmp != nil {
+			if tmp := rasp[d_now]; tmp != nil {
 				res[d_now] = tmp.(primitive.M)
 			}
 		}
@@ -109,8 +121,7 @@ func groups_endpoint(ctx *fasthttp.RequestCtx) {
 
 	ctx.Response.Header.SetCanonical(strContentType, strApplicationJSON)
 	ctx.Response.SetStatusCode(200)
-	fmt.Fprintf(ctx, string(json_obj))
-	return
+	ctx.SetBodyString(string(json_obj))
 }
 
 func groups_pool_endpoint(ctx *fasthttp.RequestCtx) {
@@ -119,72 +130,77 @@ func groups_pool_endpoint(ctx *fasthttp.RequestCtx) {
 		strApplicationJSON = []byte("application/json")
 	)
 
-	auth := ctx.Request.Header.Peek("Authorization")
-	if resp, err :=db.CheckToken(auth); err != nil {
+	auth := string(ctx.Request.Header.Peek("Authorization"))
+	if resp, err := db.CheckToken(auth); err != nil {
 		ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
 	} else if resp != 1 {
 		ctx.Response.SetStatusCode(401)
 		return
 	}
+
+	faculty := string(ctx.QueryArgs().Peek("faculty"))
 	
-	tmp, err := db.Pool()
+	tmp, err := db.Pool(faculty)
 	if err != nil {
 		ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
 	}
 
-	json_obj, err := json.Marshal(Pool{Count: len(tmp), Payload: tmp})
+	json_obj, err := json.Marshal(Pool{len(tmp), tmp})
 	if err != nil {
 		ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
 	}
 
 	ctx.Response.Header.SetCanonical(strContentType, strApplicationJSON)
 	ctx.Response.SetStatusCode(200)
-	fmt.Fprintf(ctx, string(json_obj))
+	ctx.SetBodyString(string(json_obj))
 }
 
 func token_endpoint(ctx *fasthttp.RequestCtx) {
-	var (
-		strContentType     = []byte("Content-Type")
-		strApplicationJSON = []byte("application/json")
-	)
-
 	auth := ctx.Request.Header.Peek("Authorization")
-	if bytes.Compare(auth, cfg.Password) != 0{
+	if !bytes.Equal(auth, cfg.Password) {
 		ctx.Response.SetStatusCode(401)
 		return
 	} else {
-		token := make([]byte, 10)
+		var (
+			token string
+			strContentType     = []byte("Content-Type")
+			strApplicationJSON = []byte("application/json")
+		)
+
+		tmp := make([]byte, 10)
 		
-		for {			
-			_, err := rand.Read(token)
+		for {	
+			_, err := rand.Read(tmp)
 			if err != nil {
 				ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
 			}
 
+			token = fmt.Sprintf("%x", tmp)
+			
 			db_response, err := db.InsertToken(token)
 			if err != nil {
 				ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
 				break
 			}
-			
+
 			if db_response == 1 {
 				break
 			}
 		}
 
-		resp, err := json.Marshal(Token{token})
+		json_obj, err := json.Marshal(Token{token})
 		if err != nil {
 			ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
 		}
 
 		ctx.Response.Header.SetCanonical(strContentType, strApplicationJSON)
 		ctx.Response.SetStatusCode(200)
-		fmt.Fprintf(ctx, string(resp))
+		ctx.SetBodyString(string(json_obj))
 	}
 }
 
 func token_check_endpoint(ctx *fasthttp.RequestCtx) {
-	auth := ctx.Request.Header.Peek("Authorization")
+	auth := string(ctx.Request.Header.Peek("Authorization"))
 	
 	if resp, err := db.CheckToken(auth); err != nil {
 		ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
@@ -197,7 +213,7 @@ func token_check_endpoint(ctx *fasthttp.RequestCtx) {
 
 func test_endpoint(ctx *fasthttp.RequestCtx) {
 	ctx.SetContentType("text/plain; charset=utf8")
-	fmt.Fprintf(ctx, "OK!")
+	ctx.SetBodyString("Nothing here, but it's ok")
 }
 
 func main() {

@@ -10,12 +10,12 @@ type Database struct {
 }
 
 type Token struct {
-	Key []byte `json:"key"`
+	Key string `json:"key"`
 }
 
 type Pool struct {
 	Count   int `json:"count"`
-	Payload map[string]primitive.M `json:"payload"`
+	Payload map[string][]primitive.M `json:"payload"`
 }
 
 type Configuration struct {

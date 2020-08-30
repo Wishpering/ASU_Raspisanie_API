@@ -1,7 +1,6 @@
-aiohttp
-aiodns
 motor
-pymongo
+aiohttp
 beautifulsoup4
 lxml
 loguru
+pydantic

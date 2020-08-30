@@ -11,9 +11,9 @@ import (
 	"time"
 )
 
-func (db *Database) Search(group_id string) (bson.M, error) {
+func (db *Database) Search(faculty string, group_id string) (bson.M, error) {
 	var result bson.M
-	collection := db.client.Database("Raspisanie").Collection("groups")
+	collection := db.client.Database("rasp").Collection(faculty)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -37,39 +37,52 @@ func (db *Database) Search(group_id string) (bson.M, error) {
 	}
 }
 
-func (db *Database) Pool() (map[string]primitive.M, error) {
-	output := make(map[string]primitive.M)
-	collection := db.client.Database("Raspisanie").Collection("groups")
+func (db *Database) Pool(faculty string) (map[string][]primitive.M, error) {
+	var filter bson.M
+	output := make(map[string][]primitive.M)
+	db_connection := db.client.Database("rasp")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	cur, err := collection.Find(ctx, bson.M{})
+	if faculty != "" {
+		filter = bson.M{"name": faculty}
+	} else {
+		filter = bson.M{}
+	}
+	
+	faculties, err := db_connection.ListCollectionNames(ctx, filter)
 	if err != nil {
 		return output, err
 	}
+	
+	for _, faculty := range faculties {
+		collection := db_connection.Collection(faculty)
 
-	defer cur.Close(ctx)
-
-	for cur.Next(ctx) {
-		var result bson.M
-
-		err := cur.Decode(&result)
+		cur, err := collection.Find(ctx, bson.M{})
 		if err != nil {
 			return output, err
 		}
 
-		output[result["groups"].(string)] = result["payload"].(primitive.M)
+		defer cur.Close(ctx)
+
+		for cur.Next(ctx) {
+			var result bson.M
+			
+			err := cur.Decode(&result)
+			if err != nil {
+				return output, err
+			}
+
+			delete(result, "_id")
+			output[faculty] = append(output[faculty], result)
+		}		
 	}
 
-	if err := cur.Err(); err != nil {
-		return output, err
-	}
-
-	return output, nil
+	return output, err
 }
 
-func (db *Database) InsertToken(token []byte) (int, error) {
+func (db *Database) InsertToken(token string) (int, error) {
 	collection := db.client.Database("db").Collection("tokens")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -92,18 +105,18 @@ func (db *Database) InsertToken(token []byte) (int, error) {
 	}
 }
 
-func (db *Database) CheckToken(token []byte) (int, error) {
+func (db *Database) CheckToken(token string) (int, error) {
 	collection := db.client.Database("db").Collection("tokens")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-
-	itemCount, err := collection.CountDocuments(ctx, bson.M{"token": token})
+	
+	ItemCount, err := collection.CountDocuments(ctx, bson.M{"token": token})
 	if err != nil {
 		return -1, err
 	}
 
-	if itemCount == 1 {
+	if ItemCount == 1 {
 		return 1, nil
 	} else {
 		return -1, nil
