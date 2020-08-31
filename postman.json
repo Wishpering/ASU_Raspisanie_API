@@ -73,7 +73,7 @@
 			"response": []
 		},
 		{
-			"name": "groups pool",
+			"name": "pool",
 			"request": {
 				"method": "GET",
 				"header": [
@@ -84,45 +84,13 @@
 					}
 				],
 				"url": {
-					"raw": "localhost:8080/pool/groups?faculty=",
+					"raw": "localhost:8080/pool",
 					"host": [
 						"localhost"
 					],
 					"port": "8080",
 					"path": [
-						"pool",
-						"groups"
-					],
-					"query": [
-						{
-							"key": "faculty",
-							"value": ""
-						}
-					]
-				}
-			},
-			"response": []
-		},
-		{
-			"name": "faculties pool",
-			"request": {
-				"method": "GET",
-				"header": [
-					{
-						"key": "Authorization",
-						"value": "",
-						"type": "text"
-					}
-				],
-				"url": {
-					"raw": "localhost:8080/pool/faculties",
-					"host": [
-						"localhost"
-					],
-					"port": "8080",
-					"path": [
-						"pool",
-						"faculties"
+						"pool"
 					]
 				}
 			},
