@@ -13,6 +13,8 @@ import errors
 import pytypes
 from db import Database
 
+REFRESH_RATE = 259200
+
 EXCLUDE_FACULTIES = [
     'ОБЩ'
     'АСП'
@@ -432,54 +434,64 @@ class GroupRaspPagePool:
                 await asyncio.sleep(delay)
 
 async def main():
+    generator = SystemRandom()
+    database = Database(asyncio.get_event_loop())
+    
+    while True:
+        logger.info(f'Started parsing rasp on {datetime.now()}')
+
+        async with aiohttp.TCPConnector(limit=0, ttl_dns_cache=300, keepalive_timeout=3000) as connector:
+            logger.info('Getting cookie')
+
+            async with aiohttp.ClientSession(connector=connector, connector_owner=False, cookie_jar=aiohttp.CookieJar()) as session:
+                cookies = Cookie(session)
+                site_cookie = await cookies.get()
+
+            logger.debug(f'Cookies - {site_cookie}')
+            await asyncio.sleep(generator.uniform(0, 5))
+            
+            async with aiohttp.ClientSession(connector=connector, connector_owner=False, cookies=site_cookie) as session:
+                faculties_page = FacultiesPage(
+                    session,
+                    f'students/'
+                )
+
+                faculties = await faculties_page.find()
+            
+                groups_pages_pool = GroupsPagePoll(
+                    session,
+                    faculties,
+                    generator=generator
+                )
+
+                groups_pages = await groups_pages_pool.get_all()
+
+            delay = 60 + generator.uniform(0, 60) - generator.uniform(0, 60)
+            logger.info(f'Sleeping after downloading pages - {delay} seconds')
+            await asyncio.sleep(delay)
+
+            async with aiohttp.ClientSession(connector=connector, connector_owner=False, cookies=site_cookie) as session:
+                group_page_pool = GroupRaspPagePool(
+                    session,
+                    database,
+                    groups_pages,
+                    generator=generator
+                )
+
+                await group_page_pool.get_all()
+        
+        logger.info(f'Finished parsing rasp on {datetime.now()}')
+        logger.info(f'Sleeping {REFRESH_RATE}')
+        
+        await asyncio.sleep(REFRESH_RATE)
+
+if __name__ == '__main__':
     logger.add(
         '/dev/null', backtrace=True, 
         diagnose=True, format='{time} {message}', 
         level='DEBUG'
     )
 
-    generator = SystemRandom()
-    database = Database(asyncio.get_event_loop())
-    
-    async with aiohttp.TCPConnector(limit=0, ttl_dns_cache=300, keepalive_timeout=3000) as connector:
-        logger.info('Getting cookie')
-
-        async with aiohttp.ClientSession(connector=connector, connector_owner=False, cookie_jar=aiohttp.CookieJar()) as session:
-            cookies = Cookie(session)
-            site_cookie = await cookies.get()
-
-        logger.debug(f'Cookies - {site_cookie}')
-        await asyncio.sleep(generator.uniform(0, 5))
-            
-        async with aiohttp.ClientSession(connector=connector, connector_owner=False, cookies=site_cookie) as session:
-            faculties_page = FacultiesPage(
-                session,
-                f'students/'
-            )
-
-            faculties = await faculties_page.find()
-            
-            groups_pages_pool = GroupsPagePoll(
-                session,
-                faculties,
-                generator=generator
-            )
-
-            groups_pages = await groups_pages_pool.get_all()
-
-        delay = 60 + generator.uniform(0, 60) - generator.uniform(0, 60)
-        logger.info(f'Sleeping after downloading pages - {delay} seconds')
-        await asyncio.sleep(delay)
-
-        async with aiohttp.ClientSession(connector=connector, connector_owner=False, cookies=site_cookie) as session:
-            group_page_pool = GroupRaspPagePool(
-                session,
-                database,
-                groups_pages,
-                generator=generator
-            )
-
-            await group_page_pool.get_all()
-               
-if __name__ == '__main__':
-    asyncio.run(main())
+    loop = asyncio.get_event_loop()
+    loop.create_task(main())
+    loop.run_forever()
