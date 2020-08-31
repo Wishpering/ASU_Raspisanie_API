@@ -104,7 +104,32 @@
 			"response": []
 		},
 		{
-			"name": "get rasp for range on one day",
+			"name": "faculties pool",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "localhost:8080/pool/faculties",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"pool",
+						"faculties"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get rasp",
 			"request": {
 				"method": "GET",
 				"header": [
@@ -115,14 +140,13 @@
 					}
 				],
 				"url": {
-					"raw": "localhost:8080/rasp/groups?id=&faculty=&date=&end_date=",
+					"raw": "localhost:8080/rasp?id=&faculty=&date=&end_date=",
 					"host": [
 						"localhost"
 					],
 					"port": "8080",
 					"path": [
-						"rasp",
-						"groups"
+						"rasp"
 					],
 					"query": [
 						{

@@ -14,8 +14,13 @@ type Token struct {
 }
 
 type Pool struct {
-	Count   int `json:"count"`
+	Count   int                      `json:"count"`
 	Payload map[string][]primitive.M `json:"payload"`
+}
+
+type FacultiesPool struct {
+	Count   int      `json:"count"`
+	Payload []string `json:"payload"`
 }
 
 type Configuration struct {

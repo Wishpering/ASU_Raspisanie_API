@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from loguru import logger
 from random import SystemRandom
 from re import compile
+from time import sleep
 import ssl
 
 import errors
@@ -310,7 +311,11 @@ class GroupRaspPage(ContentPage):
                     result[data]['para'].append(para_cleaned)
                     result[data]['auditoriya'].append(auditoriya)
                 
-        return result
+        return {
+            'faculty': self.group.faculty.name, 
+            'num': self.group.num, 
+            'payload': result
+        }
 
 class GroupsPagePoll:
     """Представляет собой множество страниц с ссылками на различные группы"""
@@ -403,6 +408,8 @@ class GroupRaspPagePool:
 
         # Скачиваем странички с расписанием
         for page, task_num in zip(group_page, range(1, tasks_count + 1)):
+            logger.debug(f'Creating task for group {page.group_info.num}')
+
             tasks.append(
                 asyncio.create_task(
                     page.find()
@@ -412,19 +419,21 @@ class GroupRaspPagePool:
             # Дабы не открывать больше 10 соединений
             if task_num % 10 == 0:
                 for group_rasp in await asyncio.gather(*tasks):
-                    if group_rasp == -1:
-                        logger.critical(f'Can\'not download page to parse - group = {page.group_info.num}')
-                    if group_rasp is None:
-                        logger.critical(f'Payload doesn\'t contain any info - group = {page.group_info.num}')
-                    if not group_rasp:
-                        logger.critical(f'Can\'not parse page with rasp for group = {page.group_info.num}')
-                    else:
-                        logger.debug(f'INSERTING TO DB \n {group_rasp}')
+                    faculty = group_rasp['faculty']
+                    group_num = group_rasp['num']
+                    payload = group_rasp['payload']
 
+                    if payload == -1:
+                        logger.critical(f'Can\'not download page to parse - group = {group_num}')
+                    if payload is None:
+                        logger.critical(f'Payload doesn\'t contain any info - group = {group_num}')
+                    if not payload:
+                        logger.critical(f'Can\'not parse page with rasp for group = {group_num}')
+                    else:
                         await self.db.insert(
-                            page.group_info.faculty.name,
-                            page.group_info.num, 
-                            group_rasp
+                            faculty,
+                            group_num, 
+                            payload
                         )
 
                 tasks = []
@@ -433,58 +442,70 @@ class GroupRaspPagePool:
                 logger.info(f'Sleeping {delay} seconds after downloading pages')
                 await asyncio.sleep(delay)
 
+        for group_rasp in await asyncio.gather(*tasks):
+            faculty = group_rasp['faculty']
+            group_num = group_rasp['num']
+            payload = group_rasp['payload']
+
+            if payload == -1:
+                logger.critical(f'Can\'not download page to parse - group = {group_num}')
+            elif payload is None:
+                logger.critical(f'Payload doesn\'t contain any info - group = {group_num}')
+            elif not payload:
+                logger.critical(f'Can\'not parse page with rasp for group = {group_num}')
+            else:
+                await self.db.insert(
+                    faculty,
+                    group_num, 
+                    payload
+                )
+
+        await self.db.fsync()
+
 async def main():
     generator = SystemRandom()
     database = Database(asyncio.get_event_loop())
     
-    while True:
-        logger.info(f'Started parsing rasp on {datetime.now()}')
+    async with aiohttp.TCPConnector(limit=0, ttl_dns_cache=300, keepalive_timeout=3000) as connector:
+        logger.info('Getting cookie')
 
-        async with aiohttp.TCPConnector(limit=0, ttl_dns_cache=300, keepalive_timeout=3000) as connector:
-            logger.info('Getting cookie')
+        async with aiohttp.ClientSession(connector=connector, connector_owner=False, cookie_jar=aiohttp.CookieJar()) as session:
+            cookies = Cookie(session)
+            site_cookie = await cookies.get()
 
-            async with aiohttp.ClientSession(connector=connector, connector_owner=False, cookie_jar=aiohttp.CookieJar()) as session:
-                cookies = Cookie(session)
-                site_cookie = await cookies.get()
-
-            logger.debug(f'Cookies - {site_cookie}')
-            await asyncio.sleep(generator.uniform(0, 5))
+        logger.debug(f'Cookies - {site_cookie}')
+        await asyncio.sleep(generator.uniform(0, 5))
             
-            async with aiohttp.ClientSession(connector=connector, connector_owner=False, cookies=site_cookie) as session:
-                faculties_page = FacultiesPage(
-                    session,
-                    f'students/'
-                )
+        async with aiohttp.ClientSession(connector=connector, connector_owner=False, cookies=site_cookie) as session:
+            faculties_page = FacultiesPage(
+                session,
+                f'students/'
+            )
 
-                faculties = await faculties_page.find()
+            faculties = await faculties_page.find()
             
-                groups_pages_pool = GroupsPagePoll(
-                    session,
-                    faculties,
-                    generator=generator
-                )
+            groups_pages_pool = GroupsPagePoll(
+                session,
+                faculties,
+                generator=generator
+            )
 
-                groups_pages = await groups_pages_pool.get_all()
+            groups_pages = await groups_pages_pool.get_all()
 
-            delay = 60 + generator.uniform(0, 60) - generator.uniform(0, 60)
-            logger.info(f'Sleeping after downloading pages - {delay} seconds')
-            await asyncio.sleep(delay)
+        delay = 60 + generator.uniform(0, 60) - generator.uniform(0, 60)
+        logger.info(f'Sleeping after downloading pages - {delay} seconds')
+        await asyncio.sleep(delay)
 
-            async with aiohttp.ClientSession(connector=connector, connector_owner=False, cookies=site_cookie) as session:
-                group_page_pool = GroupRaspPagePool(
-                    session,
-                    database,
-                    groups_pages,
-                    generator=generator
-                )
+        async with aiohttp.ClientSession(connector=connector, connector_owner=False, cookies=site_cookie) as session:
+            group_page_pool = GroupRaspPagePool(
+                session,
+                database,
+                groups_pages,
+                generator=generator
+            )
 
-                await group_page_pool.get_all()
-        
-        logger.info(f'Finished parsing rasp on {datetime.now()}')
-        logger.info(f'Sleeping {REFRESH_RATE}')
-        
-        await asyncio.sleep(REFRESH_RATE)
-
+            await group_page_pool.get_all()
+               
 if __name__ == '__main__':
     logger.add(
         '/dev/null', backtrace=True, 
@@ -492,6 +513,12 @@ if __name__ == '__main__':
         level='DEBUG'
     )
 
-    loop = asyncio.get_event_loop()
-    loop.create_task(main())
-    loop.run_forever()
+    while True:
+        try:
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(main())
+        finally:
+            loop.close()
+
+        logger.info(f'Finished parsing on {datetime.now()}, sleeping {REFRESH_RATE}')
+        sleep(REFRESH_RATE)

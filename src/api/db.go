@@ -50,12 +50,12 @@ func (db *Database) Pool(faculty string) (map[string][]primitive.M, error) {
 	} else {
 		filter = bson.M{}
 	}
-	
+
 	faculties, err := db_connection.ListCollectionNames(ctx, filter)
 	if err != nil {
 		return output, err
 	}
-	
+
 	for _, faculty := range faculties {
 		collection := db_connection.Collection(faculty)
 
@@ -68,7 +68,7 @@ func (db *Database) Pool(faculty string) (map[string][]primitive.M, error) {
 
 		for cur.Next(ctx) {
 			var result bson.M
-			
+
 			err := cur.Decode(&result)
 			if err != nil {
 				return output, err
@@ -76,10 +76,24 @@ func (db *Database) Pool(faculty string) (map[string][]primitive.M, error) {
 
 			delete(result, "_id")
 			output[faculty] = append(output[faculty], result)
-		}		
+		}
 	}
 
 	return output, err
+}
+
+func (db *Database) FacultiesPool() ([]string, error) {
+	db_connection := db.client.Database("rasp")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	faculties, err := db_connection.ListCollectionNames(ctx, bson.M{})
+	if err != nil {
+		return faculties, err
+	}
+
+	return faculties, err
 }
 
 func (db *Database) InsertToken(token string) (int, error) {
@@ -110,7 +124,7 @@ func (db *Database) CheckToken(token string) (int, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	
+
 	ItemCount, err := collection.CountDocuments(ctx, bson.M{"token": token})
 	if err != nil {
 		return -1, err
@@ -149,5 +163,5 @@ func (db *Database) Close() error {
 		return err
 	}
 
-	return nil		
+	return nil
 }
