@@ -8,7 +8,7 @@ from loguru import logger
 from random import SystemRandom
 from re import compile
 from time import sleep
-import ssl
+from ssl import create_default_context
 
 import errors
 import pytypes
@@ -17,17 +17,24 @@ from db import Database
 REFRESH_RATE = 259200
 
 EXCLUDE_FACULTIES = [
-    'ОБЩ'
-    'АСП'
+    'ОБЩ',
+    'АСП',
     'УРАИС',
     'ЦППК.',
     'МК',
     'АЛТГУ',
+    'СПО',
+    'ЭФ-В',
+    'ФК',
+    'ФПК'
 ]
 
 EXCLUDE_GROUPS = [
     'шк',
     'школа фт'
+    'цпс',
+    'гос',
+    'юристы'
 ]
 
 class WebPage:
@@ -59,7 +66,7 @@ class WebPage:
             async with self.session.get(
                 f'https://www.asu.ru/timetable/{self.link}', 
                 headers=WebPage.__headers,
-                ssl=ssl.create_default_context()
+                ssl=create_default_context()
             ) as request:
                 if request.status == 200:
                     return await request.text()
@@ -80,7 +87,7 @@ class Cookie:
 
         async with self.session.get(
                 self.link,
-                ssl=ssl.create_default_context()
+                ssl=create_default_context()
         ) as request:
             if request.status == 200:
                 tmp = self.session.cookie_jar.filter_cookies(self.link)
