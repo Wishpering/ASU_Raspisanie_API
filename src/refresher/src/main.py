@@ -426,16 +426,16 @@ class GroupRaspPagePool:
             # Дабы не открывать больше 10 соединений
             if task_num % 10 == 0:
                 for group_rasp in await asyncio.gather(*tasks):
+                    if group_rasp == -1:
+                        logger.critical('Can\'not download page to parse')
+                        continue
+                
                     faculty = group_rasp['faculty']
                     group_num = group_rasp['num']
                     payload = group_rasp['payload']
 
-                    if payload == -1:
-                        logger.critical(f'Can\'not download page to parse - group = {group_num}')
-                    if payload is None:
-                        logger.critical(f'Payload doesn\'t contain any info - group = {group_num}')
                     if not payload:
-                        logger.critical(f'Can\'not parse page with rasp for group = {group_num}')
+                        logger.critical(f'Payload doesn\'t contain any info - group = {group_num}')
                     else:
                         await self.db.insert(
                             faculty,
@@ -450,16 +450,16 @@ class GroupRaspPagePool:
                 await asyncio.sleep(delay)
 
         for group_rasp in await asyncio.gather(*tasks):
+            if group_rasp == -1:
+                logger.critical('Can\'not download page to parse')
+                continue
+                
             faculty = group_rasp['faculty']
             group_num = group_rasp['num']
             payload = group_rasp['payload']
 
-            if payload == -1:
-                logger.critical(f'Can\'not download page to parse - group = {group_num}')
-            elif payload is None:
+            if not payload:
                 logger.critical(f'Payload doesn\'t contain any info - group = {group_num}')
-            elif not payload:
-                logger.critical(f'Can\'not parse page with rasp for group = {group_num}')
             else:
                 await self.db.insert(
                     faculty,
