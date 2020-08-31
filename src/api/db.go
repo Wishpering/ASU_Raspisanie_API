@@ -11,6 +11,10 @@ import (
 	"time"
 )
 
+type Database struct {
+	client *mongo.Client
+}
+
 func (db *Database) Search(faculty string, group_id string) (bson.M, error) {
 	var result bson.M
 	collection := db.client.Database("rasp").Collection(faculty)
@@ -37,21 +41,14 @@ func (db *Database) Search(faculty string, group_id string) (bson.M, error) {
 	}
 }
 
-func (db *Database) Pool(faculty string) (map[string][]primitive.M, error) {
-	var filter bson.M
-	output := make(map[string][]primitive.M)
+func (db *Database) Pool() (map[string][]string, error) {
+	output := make(map[string][]string)
 	db_connection := db.client.Database("rasp")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	if faculty != "" {
-		filter = bson.M{"name": faculty}
-	} else {
-		filter = bson.M{}
-	}
-
-	faculties, err := db_connection.ListCollectionNames(ctx, filter)
+	faculties, err := db_connection.ListCollectionNames(ctx, bson.M{})
 	if err != nil {
 		return output, err
 	}
@@ -74,26 +71,11 @@ func (db *Database) Pool(faculty string) (map[string][]primitive.M, error) {
 				return output, err
 			}
 
-			delete(result, "_id")
-			output[faculty] = append(output[faculty], result)
+			output[faculty] = append(output[faculty], result["group"].(string))
 		}
 	}
 
 	return output, err
-}
-
-func (db *Database) FacultiesPool() ([]string, error) {
-	db_connection := db.client.Database("rasp")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	faculties, err := db_connection.ListCollectionNames(ctx, bson.M{})
-	if err != nil {
-		return faculties, err
-	}
-
-	return faculties, err
 }
 
 func (db *Database) InsertToken(token string) (int, error) {

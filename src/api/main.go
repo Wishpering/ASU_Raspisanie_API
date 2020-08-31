@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	db  Database
+	db         Database
 	api_passwd []byte
 )
 
@@ -138,43 +138,12 @@ func groups_pool_endpoint(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	faculty := string(ctx.QueryArgs().Peek("faculty"))
-
-	tmp, err := db.Pool(faculty)
+	tmp, err := db.Pool()
 	if err != nil {
 		ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
 	}
 
 	json_obj, err := json.Marshal(Pool{len(tmp), tmp})
-	if err != nil {
-		ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
-	}
-
-	ctx.Response.Header.SetCanonical(strContentType, strApplicationJSON)
-	ctx.Response.SetStatusCode(200)
-	ctx.SetBodyString(string(json_obj))
-}
-
-func faculties_pool_endpoint(ctx *fasthttp.RequestCtx) {
-	var (
-		strContentType     = []byte("Content-Type")
-		strApplicationJSON = []byte("application/json")
-	)
-
-	auth := string(ctx.Request.Header.Peek("Authorization"))
-	if resp, err := db.CheckToken(auth); err != nil {
-		ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
-	} else if resp != 1 {
-		ctx.Response.SetStatusCode(401)
-		return
-	}
-
-	tmp, err := db.FacultiesPool()
-	if err != nil {
-		ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
-	}
-
-	json_obj, err := json.Marshal(FacultiesPool{len(tmp), tmp})
 	if err != nil {
 		ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
 	}
@@ -205,7 +174,7 @@ func token_endpoint(ctx *fasthttp.RequestCtx) {
 			}
 
 			token = fmt.Sprintf("%x", tmp)
-			
+
 			if resp, err := db.InsertToken(token); err != nil {
 				ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
 				break
@@ -260,7 +229,7 @@ func main() {
 	}
 
 	api_passwd = cfg.Password
-	
+
 	if db_conn, err := db_init(cfg.DB_address, cfg.DB_port); err != nil {
 		panic(fmt.Sprintf("%s", "Can't open connection to db, error - %s", err))
 	} else {
@@ -272,8 +241,7 @@ func main() {
 	router.GET("/token", token_endpoint)
 	router.GET("/token/check", token_check_endpoint)
 	router.GET("/rasp", groups_endpoint)
-	router.GET("/pool/groups", groups_pool_endpoint)
-	router.GET("/pool/faculties", faculties_pool_endpoint)
+	router.GET("/pool", groups_pool_endpoint)
 
 	handler := fasthttplogger.Combined(router.Handler)
 	if cfg.Compress {
