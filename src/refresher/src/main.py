@@ -16,7 +16,7 @@ from db import Database
 
 REFRESH_RATE = 259200
 
-EXCLUDE_FACULTIES = [
+EXCLUDE_FACULTIES = (
     'ОБЩ',
     'АСП',
     'УРАИС',
@@ -27,15 +27,15 @@ EXCLUDE_FACULTIES = [
     'ЭФ-В',
     'ФК',
     'ФПК'
-]
+)
 
-EXCLUDE_GROUPS = [
+EXCLUDE_GROUPS = (
     'шк',
     'школа фт'
     'цпс',
     'гос',
     'юристы'
-]
+)
 
 class WebPage:
     """Представляет собой обычную web-страницу"""
@@ -151,7 +151,7 @@ class FacultiesPage(ContentPage):
 
         soup = BeautifulSoup(
             await self.download(delay=self.delay),
-            'lxml'
+            'html.parser'
         )
         content = soup.find_all(class_='link_ptr_left margin_bottom')
         
@@ -193,7 +193,7 @@ class GroupsPage(ContentPage):
         result = []
         soup = BeautifulSoup(
             await self.download(delay=self.delay), 
-            'lxml'
+            'html.parser'
         )
         content = soup.find_all(class_='link_ptr_left margin_bottom')
         
@@ -231,18 +231,15 @@ class GroupRaspPage(ContentPage):
         """Поиск расписания на странице"""
 
         result = {}
-        pages = []
 
         # Вычисляем дату начала и конца некст недели
         start_next_week = datetime.now() + timedelta(days = 7 - datetime.now().weekday())
         end_next_week = start_next_week + timedelta(days = 6)
 
         try:
-            # Скачиваем страницу с текущей неделей
-            pages.append(await self.download(delay=self.delay))
-
-            # Скачиваем страницу со следующей неделей
-            pages.append(
+            # Скачиваем страницу с текущей и следующей неделей
+            pages = (
+                await self.download(delay=self.delay),
                 await self.download(
                     delay=0.5,
                     append=f'?date={start_next_week.strftime("%Y%m%d")}-{end_next_week.strftime("%Y%m%d")}'
@@ -252,17 +249,14 @@ class GroupRaspPage(ContentPage):
             return -1
 
         for page in pages:
-            previous_time = ''
-
             try:
-                soup = BeautifulSoup(page, 'lxml')
-                page = soup.find_all(
-                    class_='align_top schedule')[0].find_all(
-                        class_='schedule-time'
-                    )
+                soup = BeautifulSoup(page, 'html.parser')
+                page = soup.find_all(class_='schedule-time')
             except IndexError:
                 continue
             
+            previous_time = ''
+
             for record in page:
                 record = record.find_all('td')
                 para_cleaned = ''
@@ -271,19 +265,18 @@ class GroupRaspPage(ContentPage):
                 tmp = record[5].find('a', href=True)
                 if tmp is None:
                     continue
+                else:
+                    tmp = str(tmp['href'])
 
                 # У групп 56* и 57* в ссылке почему-то ;building
                 # а у групп 58* и 59* в ссылке почему-то &building
-                tmp = tmp['href'].translate(str.maketrans({'&': '', ';': ''}))
+                tmp = tmp.translate(str.maketrans({'&': '', ';': ''}))
 
-                data = tmp.replace(
-                    '/timetable/freerooms/?date=', '').replace(
-                        'building', '')[0:8]
                 data = str(
                     datetime(
-                        int(data[0:4]), 
-                        int(data[4:6]), 
-                        int(data[6:8])
+                        int(tmp[27:31]), 
+                        int(tmp[31:33]), 
+                        int(tmp[33:35])
                     ).date()
                 )
             
@@ -317,53 +310,37 @@ class GroupRaspPage(ContentPage):
                     result[data]['time'].append(time)
                     result[data]['para'].append(para_cleaned)
                     result[data]['auditoriya'].append(auditoriya)
-                
-        return {
-            'faculty': self.group.faculty.name, 
-            'num': self.group.num, 
-            'payload': result
-        }
+
+        return self.group.faculty.name, self.group.num, result
 
 class GroupsPagePoll:
     """Представляет собой множество страниц с ссылками на различные группы"""
     
-    def __init__(self, session, faculties, **kwargs):
-        """
-        kwargs:
-            generator - SystemRandom() или другой генератор
-        """
-
+    def __init__(self, session, faculties, rand_generator):
         self.session = session
         self.faculties = faculties
-        self.generator = kwargs.get('generator', SystemRandom())
+        self.generator = rand_generator
 
     async def get_all(self):
         """
             Скачивает все страницы факультетов 
             со списками групп и парсит скаченные страницы
         """
-        
-        groups_pages = []
+
         tasks = []
 
-        # Создаем экземпляр класса для каждой группы
         for faculty in self.faculties:
             delay = self.generator.uniform(0, len(self.faculties))
 
-            groups_pages.append(
-                GroupsPage(
-                    self.session,
-                    faculty,
-                    delay=delay
-                )
+            tmp = GroupsPage(
+                self.session,
+                faculty,
+                delay=delay
             )
 
-        # Скачиваем все странички с ссылками на расписания групп
-        # и ищем на них группы и ссылки на них
-        for page in groups_pages:
             tasks.append(
                 asyncio.create_task(
-                    page.find()
+                    tmp.find()
                 )
             )
 
@@ -372,102 +349,70 @@ class GroupsPagePoll:
 class GroupRaspPagePool:
     """Представляет собой множество страниц с расписанием различных групп"""
     
-    def __init__(self, session, db_connection, pages, **kwargs):
-        """
-        kwargs:
-            generator - SystemRandom() или другой генератор
-        """
-
+    def __init__(self, session, db_connection, pages, rand_generator):
         self.session = session
         self.pages = pages
         self.db = db_connection
-        self.generator = kwargs.get('generator', SystemRandom())
+        self.generator = rand_generator
 
     async def get_all(self):
         """
             Скачивает все страницы с расписанием и парсит их
         """
 
-        group_page = []
         tasks = []
 
         # Создаем экземпляры класса для каждой группы
         for group_list in self.pages:
             for group in group_list:
-                if group.num.rfind('М') != -1 or group.num.rfind('асп') != -1 or group.num in EXCLUDE_GROUPS:
-                    logger.debug(f'Skipping group {group.num}')
-                    continue
 
-                delay = self.generator.uniform(0, 5) + self.generator.uniform(0, 30)
-                if delay <= 0:
-                    delay = 1
-
-                group_page.append(
-                    GroupRaspPage(
-                        self.session,
-                        group,
-                        delay=delay
-                    )
-                )
-
-        tasks_count = len(group_page)
-        logger.debug(f'Tasks count = {tasks_count}')
-
-        # Скачиваем странички с расписанием
-        for page, task_num in zip(group_page, range(1, tasks_count + 1)):
-            logger.debug(f'Creating task for group {page.group_info.num}')
-
-            tasks.append(
-                asyncio.create_task(
-                    page.find()
-                )  
-            )
-
-            # Дабы не открывать больше 10 соединений
-            if task_num % 10 == 0:
-                for group_rasp in await asyncio.gather(*tasks):
-                    if group_rasp == -1:
-                        logger.critical('Can\'not download page to parse')
+                # Проверяем, не нужно ли пропустить текущую группу
+                if group.num.rfind('М') != -1 \
+                    or group.num.rfind('асп') != -1 \
+                    or group.num in EXCLUDE_GROUPS:
+                        logger.debug(f'Skipping group {group.num}')
                         continue
                 
-                    faculty = group_rasp['faculty']
-                    group_num = group_rasp['num']
-                    payload = group_rasp['payload']
+                delay = self.generator.uniform(0, 5) + self.generator.uniform(0, 30)
 
-                    if not payload:
-                        logger.critical(f'Payload doesn\'t contain any info - group = {group_num}')
-                    else:
-                        await self.db.insert(
-                            faculty,
-                            group_num, 
-                            payload
-                        )
-
-                tasks = []
-                delay = 32 - self.generator.uniform(0, 30)
-
-                logger.info(f'Sleeping {delay} seconds after downloading pages')
-                await asyncio.sleep(delay)
-
-        for group_rasp in await asyncio.gather(*tasks):
-            if group_rasp == -1:
-                logger.critical('Can\'not download page to parse')
-                continue
-                
-            faculty = group_rasp['faculty']
-            group_num = group_rasp['num']
-            payload = group_rasp['payload']
-
-            if not payload:
-                logger.critical(f'Payload doesn\'t contain any info - group = {group_num}')
-            else:
-                await self.db.insert(
-                    faculty,
-                    group_num, 
-                    payload
+                tmp = GroupRaspPage(
+                    self.session,
+                    group,
+                    delay=delay
                 )
 
-        await self.db.fsync()
+                if len(tasks) < 10:
+                    logger.debug(f'Creating task for group {group.num}, faculty - {group.faculty.name}')
+
+                    tasks.append(
+                        asyncio.create_task(
+                            tmp.find()
+                        )  
+                    )
+                else:
+                    for group_rasp in await asyncio.gather(*tasks):
+                        if group_rasp == -1:
+                            logger.critical('Can\'not download page to parse')
+                            continue
+                        else:
+                            faculty, group_num, payload = group_rasp
+
+                        if not payload:
+                            logger.critical(f'Payload doesn\'t contain any info - group = {group_num}, faculty - {faculty}')
+                        else:
+                            await self.db.insert(
+                                faculty,
+                                group_num, 
+                                payload
+                            )
+
+                    tasks = []
+                    delay = 32 - self.generator.uniform(0, 30)
+
+                    await self.db.fsync()
+
+                    logger.info(f'Sleeping {delay} seconds after downloading pages')
+                    await asyncio.sleep(delay)
 
 async def main():
     generator = SystemRandom()
@@ -494,7 +439,7 @@ async def main():
             groups_pages_pool = GroupsPagePoll(
                 session,
                 faculties,
-                generator=generator
+                generator
             )
 
             groups_pages = await groups_pages_pool.get_all()
@@ -508,7 +453,7 @@ async def main():
                 session,
                 database,
                 groups_pages,
-                generator=generator
+                generator
             )
 
             await group_page_pool.get_all()

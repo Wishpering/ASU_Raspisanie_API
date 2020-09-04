@@ -1,6 +1,7 @@
-from pydantic import BaseModel
+from dataclasses import dataclass
 
-class Faculty(BaseModel):
+@dataclass
+class Faculty:
     """
     id - id факультета на сайте \n
     name - название факультета \n
@@ -11,7 +12,8 @@ class Faculty(BaseModel):
     name: str
     link: str
 
-class Group(BaseModel):
+@dataclass
+class Group:
     """
     id - id группы на сайте \n
     faculty - pytypes.Faculty \n

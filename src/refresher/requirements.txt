@@ -1,6 +1,4 @@
 motor
 aiohttp
 beautifulsoup4
-lxml
 loguru
-pydantic
