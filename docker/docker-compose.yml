@@ -38,8 +38,6 @@ services:
   api_refresher:
       image: api_refresher_img
       container_name: api_refresher
-
-      restart: on-failure
       
       logging:
             driver: "json-file"
