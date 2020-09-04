@@ -25,3 +25,15 @@ class Group:
     faculty: Faculty
     num: str
     link: str
+
+@dataclass
+class Raspisanie:
+    """
+    faculty - имя факультета \n
+    group - название группы (575.../etc) \n
+    rasp - расписание
+    """
+
+    faculty: str
+    group: str
+    rasp: dict

@@ -17,24 +17,16 @@ from db import Database
 REFRESH_RATE = 259200
 
 EXCLUDE_FACULTIES = (
-    'ОБЩ',
-    'АСП',
-    'УРАИС',
-    'ЦППК.',
-    'МК',
-    'АЛТГУ',
-    'СПО',
-    'ЭФ-В',
-    'ФК',
-    'ФПК'
+    'ОБЩ', 'АСП', 'УРАИС', 'ЦППК.',
+    'МК', 'АЛТГУ', 'СПО', 'ЭФ-В', 'ФК', 'ФПК'
 )
 
 EXCLUDE_GROUPS = (
-    'шк',
-    'школа фт'
-    'цпс',
-    'гос',
-    'юристы'
+    'АУ', 'Б.У', 'выборы', 'колледж', 'лига',
+    'ССО', 'финансы', 'форум', 'ФПК', 'фр',
+    'хор.кап', 'ЦСТД', 'шахматы', 'эконом.',
+    'ЭТиУП', 'TOEFL.', 'UNICO', 'шк', 'школа фт'
+    'цпс', 'гос', 'юристы'
 )
 
 class WebPage:
@@ -211,7 +203,6 @@ class GroupsPage(ContentPage):
             )
             
         return result
-
 class GroupRaspPage(ContentPage):
     """Представляет собой страницу с расписанием какой-либо группы"""
 
@@ -268,10 +259,6 @@ class GroupRaspPage(ContentPage):
                 else:
                     tmp = str(tmp['href'])
 
-                # У групп 56* и 57* в ссылке почему-то ;building
-                # а у групп 58* и 59* в ссылке почему-то &building
-                tmp = tmp.translate(str.maketrans({'&': '', ';': ''}))
-
                 data = str(
                     datetime(
                         int(tmp[27:31]), 
@@ -311,7 +298,9 @@ class GroupRaspPage(ContentPage):
                     result[data]['para'].append(para_cleaned)
                     result[data]['auditoriya'].append(auditoriya)
 
-        return self.group.faculty.name, self.group.num, result
+        return pytypes.Raspisanie(
+            self.group.faculty.name, self.group.num, result
+        )
 
 class GroupsPagePoll:
     """Представляет собой множество страниц с ссылками на различные группы"""
@@ -355,11 +344,7 @@ class GroupRaspPagePool:
         self.db = db_connection
         self.generator = rand_generator
 
-    async def get_all(self):
-        """
-            Скачивает все страницы с расписанием и парсит их
-        """
-
+    def create_tasks(self):
         tasks = []
 
         # Создаем экземпляры класса для каждой группы
@@ -375,50 +360,48 @@ class GroupRaspPagePool:
                 
                 delay = self.generator.uniform(0, 5) + self.generator.uniform(0, 30)
 
-                tmp = GroupRaspPage(
-                    self.session,
-                    group,
-                    delay=delay
+                logger.debug(f'Creating task for group {group.num}, faculty = {group.faculty.name}')
+
+                tasks.append(
+                    asyncio.create_task(
+                        GroupRaspPage(
+                            self.session,
+                            group,
+                            delay=delay
+                        ).find()
+                    )  
                 )
 
-                if len(tasks) < 10:
-                    logger.debug(f'Creating task for group {group.num}, faculty - {group.faculty.name}')
+        # Делим таски на чанки
+        return [tasks[i:i+10] for i in range(0, len(tasks), 10)]
 
-                    tasks.append(
-                        asyncio.create_task(
-                            tmp.find()
-                        )  
-                    )
+    async def get_all(self, tasks):
+        """
+            Скачивает все страницы с расписанием и парсит их
+        """
+
+        result = []
+
+        logger.debug(tasks)
+        logger.debug(f'tasks len - {len(tasks)}')
+
+        for group_rasp in await asyncio.gather(*tasks):
+            if group_rasp == -1:
+                logger.critical('Can\'not download page to parse')
+                continue
+            else:
+                if not group_rasp.rasp:
+                    logger.critical(f'Payload doesn\'t contain any info - group = {group_rasp.group}, faculty - {group_rasp.faculty}')
                 else:
-                    for group_rasp in await asyncio.gather(*tasks):
-                        if group_rasp == -1:
-                            logger.critical('Can\'not download page to parse')
-                            continue
-                        else:
-                            faculty, group_num, payload = group_rasp
+                    result.append(group_rasp)
 
-                        if not payload:
-                            logger.critical(f'Payload doesn\'t contain any info - group = {group_num}, faculty - {faculty}')
-                        else:
-                            await self.db.insert(
-                                faculty,
-                                group_num, 
-                                payload
-                            )
-
-                    tasks = []
-                    delay = 32 - self.generator.uniform(0, 30)
-
-                    await self.db.fsync()
-
-                    logger.info(f'Sleeping {delay} seconds after downloading pages')
-                    await asyncio.sleep(delay)
+        return result
 
 async def main():
     generator = SystemRandom()
     database = Database(asyncio.get_event_loop())
     
-    async with aiohttp.TCPConnector(limit=0, ttl_dns_cache=300, keepalive_timeout=3000) as connector:
+    async with aiohttp.TCPConnector(limit=10, ttl_dns_cache=300, keepalive_timeout=3000) as connector:
         logger.info('Getting cookie')
 
         async with aiohttp.ClientSession(connector=connector, connector_owner=False, cookie_jar=aiohttp.CookieJar()) as session:
@@ -456,7 +439,20 @@ async def main():
                 generator
             )
 
-            await group_page_pool.get_all()
+            for tasks in group_page_pool.create_tasks():
+                for group in await group_page_pool.get_all(tasks):
+                    await database.insert(
+                        group.faculty,
+                        group.num, 
+                        group.rasp
+                    )
+            
+                await database.fsync()
+
+                delay = 32 - generator.uniform(0, 30)
+
+                logger.info(f'Sleeping {delay} seconds after downloading pages')
+                await asyncio.sleep(delay)
                
 if __name__ == '__main__':
     logger.add(
