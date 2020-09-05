@@ -201,8 +201,9 @@ class GroupsPage(ContentPage):
                     link=f'{self.link}{site_id}'
                 )
             )
-            
+        
         return result
+
 class GroupRaspPage(ContentPage):
     """Представляет собой страницу с расписанием какой-либо группы"""
 
@@ -224,7 +225,9 @@ class GroupRaspPage(ContentPage):
         result = {}
 
         # Вычисляем дату начала и конца некст недели
-        start_next_week = datetime.now() + timedelta(days = 7 - datetime.now().weekday())
+        start_next_week = datetime.now() + timedelta(
+            days = 7 - datetime.now().weekday()
+        )
         end_next_week = start_next_week + timedelta(days = 6)
 
         try:
@@ -347,7 +350,6 @@ class GroupRaspPagePool:
     def create_tasks(self):
         tasks = []
 
-        # Создаем экземпляры класса для каждой группы
         for group_list in self.pages:
             for group in group_list:
 
@@ -360,42 +362,22 @@ class GroupRaspPagePool:
                 
                 delay = self.generator.uniform(0, 5) + self.generator.uniform(0, 30)
 
-                logger.debug(f'Creating task for group {group.num}, faculty = {group.faculty.name}')
+                logger.debug(
+                    f'Creating task for group {group.num},'
+                    f'faculty = {group.faculty.name} '
+                    f'with delay = {delay}'
+                )
 
                 tasks.append(
-                    asyncio.create_task(
-                        GroupRaspPage(
-                            self.session,
-                            group,
-                            delay=delay
-                        ).find()
-                    )  
+                    GroupRaspPage(
+                        self.session,
+                        group,
+                        delay=delay
+                    )
                 )
 
         # Делим таски на чанки
         return [tasks[i:i+10] for i in range(0, len(tasks), 10)]
-
-    async def get_all(self, tasks):
-        """
-            Скачивает все страницы с расписанием и парсит их
-        """
-
-        result = []
-
-        logger.debug(tasks)
-        logger.debug(f'tasks len - {len(tasks)}')
-
-        for group_rasp in await asyncio.gather(*tasks):
-            if group_rasp == -1:
-                logger.critical('Can\'not download page to parse')
-                continue
-            else:
-                if not group_rasp.rasp:
-                    logger.critical(f'Payload doesn\'t contain any info - group = {group_rasp.group}, faculty - {group_rasp.faculty}')
-                else:
-                    result.append(group_rasp)
-
-        return result
 
 async def main():
     generator = SystemRandom()
@@ -410,7 +392,7 @@ async def main():
 
         logger.debug(f'Cookies - {site_cookie}')
         await asyncio.sleep(generator.uniform(0, 5))
-            
+
         async with aiohttp.ClientSession(connector=connector, connector_owner=False, cookies=site_cookie) as session:
             faculties_page = FacultiesPage(
                 session,
@@ -419,6 +401,7 @@ async def main():
 
             faculties = await faculties_page.find()
             
+
             groups_pages_pool = GroupsPagePoll(
                 session,
                 faculties,
@@ -439,13 +422,33 @@ async def main():
                 generator
             )
 
-            for tasks in group_page_pool.create_tasks():
-                for group in await group_page_pool.get_all(tasks):
-                    await database.insert(
-                        group.faculty,
-                        group.num, 
-                        group.rasp
+            for grouped_tasks in group_page_pool.create_tasks():
+                tasks = []
+
+                for chunk in grouped_tasks:
+                    tasks.append(
+                        asyncio.create_task(
+                            chunk.find()
+                        )
                     )
+
+                for group_rasp in await asyncio.gather(*tasks):
+                    if group_rasp == -1:
+                        logger.critical('Can\'not download page to parse')
+                        continue
+                    else:
+                        if not group_rasp.rasp:
+                            logger.critical(
+                                f'Payload doesn\'t contain any info'
+                                f' - group = {group_rasp.group},'
+                                f'faculty - {group_rasp.faculty}'
+                            )
+                        else:
+                            await database.insert(
+                                group_rasp.faculty,
+                                group_rasp.group, 
+                                group_rasp.rasp
+                            )
             
                 await database.fsync()
 
