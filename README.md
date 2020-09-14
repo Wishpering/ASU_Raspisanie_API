@@ -1,22 +1,17 @@
 # Описание
 
-API предназначено для получения расписания групп/преподавателей АГУ
+API предназначено для получения расписания групп АГУ
 
 ## Требования
 
-Для работы нужен интерпретатор Python версии 3+, docker, docker-Compose, make, go
+Для работы нужен интерпретатор Python версии 3+, docker, docker-compose, make
 
 ## Getting Started
 ```bash
 git clone https://github.com/Wishpering/asu_rasp_api.git
 ```
-Нужно заполнить конфигурационный файл в папке /configs.
+Нужно заполнить конфигурационный файл в папке ./configs и поменять ENV для API в ./docker/.env
 
-Так же необходимо указать группы и фамилии преподавателей для добавления в пулл в формате: \
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- Группы - создать файл data/groups и заполнить его в формате:  
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ```"факультет:номер_группы"``` \
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- Преподаватели - создать файл data/preps и заполнить его в формате: \
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;```"факультет:кафедра:фамилия"```
 
 ## Возможности
 
@@ -28,41 +23,30 @@ git clone https://github.com/Wishpering/asu_rasp_api.git
 ```http
 - http://server/token
   - Headers: 
-    - Authorization:password = пароль из файла config.json, предназначенный для генерации токена
+    - Authorization: {{ password = пароль из ./docker/.env }}
+```
+
+Запрос используется для проверки валидности токена:
+```http
+- http://server/token/check
+  - Headers: 
+    - Authorization: {{ token_for_check }}
 ```
 
 Запрос для получения расписания группы:
 ```http
-- http://server/rasp/groups
+- http://server/rasp
   - Headers:
-    - Authorization:token
+    - Authorization: {{ token }}
   - Параметры:
     - id = номер группы
     - date = дата, для которой будет проверяться расписание. Формат - yy:mm:dd.
     - end_date = дата, до которой будет проверяться расписание. Формат - yy:mm:dd.
 ```
 
-Запрос для получения расписания преподавателя:
-```http
-- http://server/rasp/preps
-  - Headers:
-    - Authorization:token
-  - Параметры:
-    - name = фамилия/имя преподавателя
-    - date = дата, для которой будет проверяться расписание. Формат - yy:mm:dd.
-    - end_date = дата, до которой будет проверяться расписание. Формат - yy:mm:dd.
-```
-
 Запрос для получения списка групп:
 ```http
-- http://server/pool/groups
+- http://server/pool
   - Headers: 
-    - Authorization:token
-```
-
-Запрос для получения списка преподавателей:
-```http
-- http://server/pool/preps
-  - Headers:
-    - Authorization:token
+    - Authorization: {{ token }}
 ```
