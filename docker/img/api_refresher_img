@@ -3,11 +3,14 @@ FROM python:alpine3.12
 RUN apk add --no-cache libxml2-dev libxslt-dev gcc musl-dev libffi-dev ca-certificates
 
 WORKDIR /refresher
-COPY ./requirements.txt ./
+COPY ./src/refresher/requirements.txt ./
 
 RUN pip install -r requirements.txt
 
-WORKDIR /refresher/src
-COPY ./src/ ./
+WORKDIR /
+COPY ./docker/img/entrypoints/refresher-entrypoint.sh .
 
-CMD ["python3", "main.py"]
+WORKDIR /refresher/
+COPY ./src/refresher/src/ ./
+
+ENTRYPOINT ["/refresher-entrypoint.sh"]

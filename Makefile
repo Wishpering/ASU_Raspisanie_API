@@ -1,6 +1,10 @@
 include ./docker/.env
 
-deploy:
+img:
+	docker build -t api_refresher_img:latest -f docker/img/api_refresher_img ./
+	docker build -t api_img:latest -f docker/img/api_img ./src/api
+
+deploy: img
 ifeq ($(API_PASSWD),)
 	$(error "env var API_PASSWD is empty")
 endif
@@ -14,9 +18,6 @@ endif
 
 	@echo "Starting ..."
 	@cd ./docker && docker-compose up -d
-img:
-	docker build -t api_refresher_img:latest -f docker/img/api_refresher_img ./src/refresher
-	docker build -t api_img:latest -f docker/img/api_img ./src/api
 clean:
 	docker rmi api_img:latest
 	docker rmi api_refresher_img:latest

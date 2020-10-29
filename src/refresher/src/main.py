@@ -14,8 +14,6 @@ import errors
 import pytypes
 from db import Database
 
-REFRESH_RATE = 259200
-
 EXCLUDE_FACULTIES = (
     'ОБЩ', 'АСП', 'УРАИС', 'ЦППК.',
     'МК', 'АЛТГУ', 'СПО', 'ЭФ-В', 'ФК', 'ФПК'
@@ -464,12 +462,10 @@ if __name__ == '__main__':
         level='DEBUG'
     )
 
-    while True:
-        try:
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(main())
-        finally:
-            loop.close()
+    try:
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(main())
+    finally:
+        loop.close()
 
-        logger.info(f'Finished parsing on {datetime.now()}, sleeping {REFRESH_RATE}')
-        sleep(REFRESH_RATE)
+    logger.info(f'Finished parsing on {datetime.now()}')
