@@ -47,14 +47,26 @@ class WebPage:
         self.session = session
         self.link = link
         
-    async def get(self):
-        """Скачивает и возвращает страницу"""
+    async def get(self, **kwargs):
+        """Скачивает страницу и возвращает её.\n
+        В случае status_code != 200 поднимает исключение BadPage/PageDownloadError \n
+        kwargs:
+            append - добавить к ссылке
+        """
 
-        WebPage.__headers[':path'] = f'/timetable/{self.link}'
-        
+        data_to_append = kwargs.get('append', None)
+        if data_to_append is not None:
+            link = self.link + data_to_append
+        else:
+            link = self.link
+
+        WebPage.__headers[':path'] = f'/timetable/{link}'
+    
+        logger.info(f'Downloading page - {link}')
+    
         try:
             async with self.session.get(
-                f'https://www.asu.ru/timetable/{self.link}', 
+                f'https://www.asu.ru/timetable/{link}', 
                 headers=WebPage.__headers,
                 ssl=create_default_context()
             ) as request:
@@ -63,7 +75,7 @@ class WebPage:
                 else:
                     raise errors.PageDownloadError(f'http code - {request.status}')
         except Exception as error:
-            raise errors.PageDownloadError(f'Can\'not download page, link - {self.link}, error - {error}')
+            raise errors.PageDownloadError(f'Can\'not download page, link - {link}, error - {error}')
 
 class Cookie:
     """Представляет собой cookie файл"""
@@ -99,10 +111,6 @@ class ContentPage(WebPage):
             append - добавить к ссылке
         """
 
-        data_to_append = kwargs.get('append', None)
-        if data_to_append is not None:
-            self.link += data_to_append
-
         delay = kwargs.get('delay', 0)
         if delay != 0:
             logger.debug(
@@ -112,9 +120,9 @@ class ContentPage(WebPage):
 
             await asyncio.sleep(delay)
 
-        logger.info(f'Downloading page - {self.link}')
-
-        page = await self.get()
+        page = await self.get(
+            append=kwargs.get('append')
+        )
         if page is None:
             raise errors.BadPage
 
@@ -162,6 +170,8 @@ class FacultiesPage(ContentPage):
             else:
                 logger.debug(f'Skipping faculty {faculty_name}')
             
+        soup.decompose()
+        
         return result
 
 class GroupsPage(ContentPage):
@@ -200,6 +210,8 @@ class GroupsPage(ContentPage):
                 )
             )
         
+        soup.decompose()
+
         return result
 
 class GroupRaspPage(ContentPage):
@@ -217,87 +229,86 @@ class GroupRaspPage(ContentPage):
 
         return self.group
 
-    async def find(self):
-        """Поиск расписания на странице"""
+    async def find(self, **kwargs):
+        """Поиск расписания на странице \n
+        kwargs: 
+            append - добавить к ссылке
+        """
 
         result = {}
-
-        # Вычисляем дату начала и конца некст недели
-        start_next_week = datetime.now() + timedelta(
-            days = 7 - datetime.now().weekday()
-        )
-        end_next_week = start_next_week + timedelta(days = 6)
+        to_append = kwargs.get('append') or None
 
         try:
             # Скачиваем страницу с текущей и следующей неделей
-            pages = (
-                await self.download(delay=self.delay),
-                await self.download(
-                    delay=0.5,
-                    append=f'?date={start_next_week.strftime("%Y%m%d")}-{end_next_week.strftime("%Y%m%d")}'
-                )
-            )
+            if to_append is not None:
+                page = await self.download(
+                    delay=self.delay + 1.5,
+                    append=to_append
+                )        
+            else:
+                page = await self.download(delay=self.delay)
         except (errors.BadPage, errors.PageDownloadError):
             return -1
 
-        for page in pages:
-            try:
-                soup = BeautifulSoup(page, 'html.parser')
-                page = soup.find_all(class_='schedule-time')
-            except IndexError:
+        try:
+            soup = BeautifulSoup(page, 'html.parser')
+            page = soup.find_all(class_='schedule-time')
+        except IndexError:
+            return -1
+            
+        previous_time = ''
+
+        for record in page:
+            td_tags = record.find_all('td')
+            para_cleaned = ''
+            data = None
+            
+            tmp = td_tags[5].find('a', href=True)
+            if tmp is None:
                 continue
+            else:
+                tmp = str(tmp['href'])
+
+            data = str(
+                datetime(
+                    int(tmp[27:31]), 
+                    int(tmp[31:33]), 
+                    int(tmp[33:35])
+                ).date()
+            )
             
-            previous_time = ''
+            # Иногда на сайте не указана дата, просто пропускаем
+            if data is None:
+                continue
 
-            for record in page:
-                record = record.find_all('td')
-                para_cleaned = ''
-                data = None
-            
-                tmp = record[5].find('a', href=True)
-                if tmp is None:
-                    continue
-                else:
-                    tmp = str(tmp['href'])
+            auditoriya = td_tags[4].text.replace('\n', '').rstrip()
+            para_name = td_tags[2].text.replace('\n', '').split(' ')
+            time = td_tags[1].text.replace('\n', '').rstrip()
 
-                data = str(
-                    datetime(
-                        int(tmp[27:31]), 
-                        int(tmp[31:33]), 
-                        int(tmp[33:35])
-                    ).date()
-                )
-            
-                # Иногда на сайте не указана дата, просто пропускаем
-                if data is None:
-                    continue
+            # Если строка пуста (что бывает, когда у двух подгрупп пара в одно время)
+            # то просто ставим предыдущее значение
+            if time:
+                previous_time = time
+            if not time:
+                time = previous_time
 
-                auditoriya = record[4].text.replace('\n', '').rstrip()
-                para_name = record[2].text.replace('\n', '').split(' ')
-                time = record[1].text.replace('\n', '').rstrip()
+            for part in para_name:
+                if part != '':
+                    para_cleaned += part + ' '
 
-                # Если строка пуста (что бывает, когда у двух подгрупп пара в одно время)
-                # то просто ставим предыдущее значение
-                if time:
-                    previous_time = time
-                if not time:
-                    time = previous_time
-
-                for part in para_name:
-                    if part != '':
-                        para_cleaned += part + ' '
-
-                if data not in result:
-                    result[data] = {
-                        'time': [time],
-                        'para': [para_cleaned],
-                        'auditoriya': [auditoriya]
-                    }
+            if data not in result:
+                result[data] = {
+                    'time': [time],
+                    'para': [para_cleaned],
+                    'auditoriya': [auditoriya]
+                }
                 
-                else:
-                    result[data]['time'].append(time)
-                    result[data]['para'].append(para_cleaned)
-                    result[data]['auditoriya'].append(auditoriya)
+            else:
+                result[data]['time'].append(time)
+                result[data]['para'].append(para_cleaned)
+                result[data]['auditoriya'].append(auditoriya)
+
+        soup.decompose()
 
         return pytypes.Raspisanie(
             self.group.faculty.name, self.group.num, result
@@ -350,7 +361,6 @@ class GroupRaspPagePool:
 
         for group_list in self.pages:
             for group in group_list:
-
                 # Проверяем, не нужно ли пропустить текущую группу
                 if group.num.rfind('М') != -1 \
                     or group.num.rfind('асп') != -1 \
@@ -375,7 +385,7 @@ class GroupRaspPagePool:
                 )
 
         # Делим таски на чанки
-        return [tasks[i:i+10] for i in range(0, len(tasks), 10)]
+        return [tasks[i:i+5] for i in range(0, len(tasks), 5)]
 
 async def main():
     generator = SystemRandom()
@@ -397,8 +407,7 @@ async def main():
                 f'students/'
             )
 
-            faculties = await faculties_page.find()
-            
+            faculties = await faculties_page.find()   
 
             groups_pages_pool = GroupsPagePoll(
                 session,
@@ -420,33 +429,58 @@ async def main():
                 generator
             )
 
+            # Вычисляем дату начала и конца некст недели
+            start_next_week = datetime.now() + timedelta(
+                days = 7 - datetime.now().weekday()
+            )
+            end_next_week = start_next_week + timedelta(days = 6)
+
             for grouped_tasks in group_page_pool.create_tasks():
-                tasks = []
+                group_tasks = []
 
                 for chunk in grouped_tasks:
-                    tasks.append(
+                    day_tasks = [
                         asyncio.create_task(
                             chunk.find()
+                        ), 
+                        asyncio.create_task(
+                            chunk.find(
+                                append=f'?date={start_next_week.strftime("%Y%m%d")}-{end_next_week.strftime("%Y%m%d")}'
+                            )
                         )
-                    )
+                    ]
 
-                for group_rasp in await asyncio.gather(*tasks):
-                    if group_rasp == -1:
-                        logger.critical('Can\'not download page to parse')
-                        continue
-                    else:
-                        if not group_rasp.rasp:
-                            logger.critical(
-                                f'Payload doesn\'t contain any info'
-                                f' - group = {group_rasp.group},'
-                                f'faculty - {group_rasp.faculty}'
-                            )
+                    group_tasks.append(day_tasks)
+
+                for group_rasp_for_days in group_tasks:
+                    rasp = []
+
+                    for group_rasp in await asyncio.gather(*group_rasp_for_days):
+                        if group_rasp == -1:
+                            logger.critical('Can\'not download page to parse')
+                            continue
                         else:
-                            await database.insert(
-                                group_rasp.faculty,
-                                group_rasp.group, 
-                                group_rasp.rasp
-                            )
+                            if not group_rasp.rasp:
+                                logger.critical(
+                                    f'Payload doesn\'t contain any info'
+                                    f' - group = {group_rasp.group},'
+                                    f'faculty - {group_rasp.faculty}'
+                                )
+                            else:
+                                rasp.append(group_rasp)
+
+                    if len(rasp) == 2:
+                        await database.insert(
+                            group_rasp.faculty,
+                            group_rasp.group, 
+                            {**rasp[0].rasp, **rasp[1].rasp}
+                        )
+                    else:
+                        await database.insert(
+                            group_rasp.faculty,
+                            group_rasp.group, 
+                            group_rasp.rasp
+                        )
             
                 await database.fsync()
 
