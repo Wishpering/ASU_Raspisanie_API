@@ -57,7 +57,7 @@ func (db *Database) Pool() (map[string][]string, error) {
 	}
 
 	for _, faculty := range Faculties {
-		if faculty == "admin" || faculty == "local" || faculty == "config" {
+		if faculty == "admin" || faculty == "local" || faculty == "config" || faculty == "colly" {
 			continue
 		}
 

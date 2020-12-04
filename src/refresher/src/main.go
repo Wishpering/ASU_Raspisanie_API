@@ -2,13 +2,15 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/gocolly/colly"
+	"github.com/gocolly/colly/v2"
+	"github.com/gocolly/colly/v2/extensions"
 )
 
 var db Database
@@ -72,13 +74,23 @@ func (group *Group) GetRasp(Collector *colly.Collector, FacultyID int) (map[stri
 			}
 		})
 	})
+	defer func() {
+		Collector.OnHTMLDetach("table td tr class")
+	}()
 
-	Collector.Visit(fmt.Sprintf("https://www.asu.ru/timetable/students/%d/%d", FacultyID, group.ID))
+	if err := Collector.Visit(
+		fmt.Sprintf(
+			"https://www.asu.ru/timetable/students/%d/%d",
+			FacultyID, group.ID,
+		),
+	); err != nil {
+		return nil, err
+	}
 
 	NextWeekStartDay := time.Now().AddDate(0, 0, 7-time.Now().Day())
 	NextWeekEndDay := NextWeekStartDay.AddDate(0, 0, 6)
 
-	Collector.Visit(
+	if err := Collector.Visit(
 		fmt.Sprintf(
 			"https://www.asu.ru/timetable/students/%d/%d/?date=%s-%s",
 			FacultyID,
@@ -86,7 +98,9 @@ func (group *Group) GetRasp(Collector *colly.Collector, FacultyID int) (map[stri
 			NextWeekStartDay.Format("20060102"),
 			NextWeekEndDay.Format("20060102"),
 		),
-	)
+	); err != nil {
+		return nil, err
+	}
 
 	if len(schedule_day) == 0 {
 		return nil, errors.New(fmt.Sprintf("Empty schedule for faculty=%d, group=%d", FacultyID, group.ID))
@@ -97,13 +111,7 @@ func (group *Group) GetRasp(Collector *colly.Collector, FacultyID int) (map[stri
 
 func (faculty *Faculty) GetAllGroups(Collector *colly.Collector) {
 	var (
-		IgnoreGroups = [...]string{"АУ", "Б.У", "выборы", "колледж", "лига", "ССО",
-			"финансы", "форум", "ФПК", "фр", "хор.кап", "ЦСТД",
-			"шахматы", "эконом.", "ЭТиУП", "TOEFL.", "UNICO",
-			"шк", "школа фт", "цпс", "гос", "юристы",
-			"зсд", "нбз", "сзд", "ГМУ", "ТПА", "ЧП", "УСП",
-			"АГ", "ВМ", "ИТ", "юр", "з", "асп",
-		}
+		IgnoreGroups = [...]string{"юр", "з", "асп"}
 	)
 
 	Collector.OnHTML("a[href]", func(e *colly.HTMLElement) {
@@ -111,6 +119,11 @@ func (faculty *Faculty) GetAllGroups(Collector *colly.Collector) {
 			if id > 0 {
 				name := e.Text
 
+				if !ContainsNum(name) {
+					fmt.Println("skipping ", name)
+					return
+				}
+				
 				for _, ignore := range IgnoreGroups {
 					if strings.Contains(
 						strings.ToLower(name),
@@ -119,11 +132,14 @@ func (faculty *Faculty) GetAllGroups(Collector *colly.Collector) {
 						return
 					}
 				}
-
+				
 				faculty.Groups = append(faculty.Groups, Group{id, name})
 			}
 		}
 	})
+	defer func() {
+		Collector.OnHTMLDetach("a[href]")
+	}()
 
 	Collector.Visit(fmt.Sprintf("https://www.asu.ru/timetable/students/%d", faculty.ID))
 }
@@ -162,6 +178,9 @@ func GetAllFaculties(Collector *colly.Collector) []Faculty {
 			)
 		}
 	})
+	defer func() {
+		Collector.OnHTMLDetach("a[href]")
+	}()
 
 	Collector.Visit("https://www.asu.ru/timetable/students/")
 
@@ -169,13 +188,23 @@ func GetAllFaculties(Collector *colly.Collector) []Faculty {
 }
 
 func main() {
-	Collector := colly.NewCollector()
+	db_address := flag.String("db-address", "localhost", "MongoDB address")
+	db_port := flag.String("db-port", "27017", "MongoDB port")
+	flag.Parse()
+
+	Collector := colly.NewCollector(
+		colly.IgnoreRobotsTxt(),
+		colly.AllowURLRevisit(),
+	)
+
 	Collector.Limit(&colly.LimitRule{
 		Parallelism: 10,
 		RandomDelay: 1 * time.Second,
 	})
 
-	if DbLink, err := DbInit(DatabaseOptions{"database", "27017"}); err != nil {
+	extensions.RandomUserAgent(Collector)
+
+	if DbLink, err := DbInit(DatabaseOptions{*db_address, *db_port}); err != nil {
 		panic(err)
 	} else {
 		db = DbLink
@@ -198,9 +227,11 @@ func main() {
 
 					if err := db.Insert(faculty.Name, group.Name, tmp); err != nil {
 						fmt.Printf("Error on inserting rasp in db for group=%s %s\n", group.Name, err)
-					} 
+					}
 				}
 			}
+
+			fmt.Printf("Finished parsing rasp for group=%s\n", group.Name)
 		}
 	}
 }
