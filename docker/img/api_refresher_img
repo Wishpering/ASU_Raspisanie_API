@@ -1,16 +1,18 @@
-FROM python:alpine3.12
+FROM golang:latest as builder
 
-RUN apk add --no-cache libxml2-dev libxslt-dev gcc musl-dev libffi-dev ca-certificates
+WORKDIR /build_dir
+COPY ./src .
 
-WORKDIR /refresher
-COPY ./src/refresher/requirements.txt ./
+RUN go build -v -o refresher_bin .
 
-RUN pip install -r requirements.txt
+FROM alpine:latest
+
+RUN apk add --no-cache libc6-compat
+
+WORKDIR /api
+COPY --from=builder /build_dir/refresher_bin .
 
 WORKDIR /
-COPY ./docker/img/entrypoints/refresher-entrypoint.sh .
+COPY ./docker-entrypoint.sh .
 
-WORKDIR /refresher/
-COPY ./src/refresher/src/ ./
-
-ENTRYPOINT ["/refresher-entrypoint.sh"]
+ENTRYPOINT /docker-entrypoint.sh

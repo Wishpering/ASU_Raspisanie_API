@@ -1,14 +1,10 @@
 include ./docker/.env
 
 img:
-	docker build -t api_refresher_img:latest -f docker/img/api_refresher_img ./
+	docker build -t api_refresher_img:latest -f docker/img/api_refresher_img ./src/refresher
 	docker build -t api_img:latest -f docker/img/api_img ./src/api
 
 deploy: img
-ifeq ($(API_PASSWD),)
-	$(error "env var API_PASSWD is empty")
-endif
-
 	@echo "Checking docker-compose config"
 	@cd ./docker && docker-compose config >> /dev/null
 

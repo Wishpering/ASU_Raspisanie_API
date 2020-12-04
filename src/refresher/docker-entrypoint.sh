@@ -7,7 +7,7 @@ set -o pipefail
 REFRESH_RATE=25600
 
 while true; do
-    env python3 /refresher/main.py
+    /api/refresher_bin
     
     echo "Slepping ${REFRESH_RATE}"
     sleep $REFRESH_RATE

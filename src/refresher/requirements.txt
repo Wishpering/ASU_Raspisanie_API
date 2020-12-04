@@ -1,4 +1,0 @@
-motor
-aiohttp
-beautifulsoup4
-loguru

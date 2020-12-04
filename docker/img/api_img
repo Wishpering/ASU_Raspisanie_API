@@ -1,21 +1,16 @@
 FROM golang:latest as builder
 
-RUN go get -v github.com/fasthttp/router \
-       	      github.com/valyala/fasthttp \
-	      github.com/AubSs/fasthttplogger \
-	      go.mongodb.org/mongo-driver/mongo
-
 WORKDIR /build_dir
 COPY . .
 
-RUN go build -v -o bin .
+RUN go build -v -o server_bin .
 
 FROM alpine:latest
 
 RUN apk add --no-cache libc6-compat
 
 WORKDIR /api
-COPY --from=builder /build_dir/bin .
+COPY --from=builder /build_dir/server_bin .
 
 EXPOSE 8080
-ENTRYPOINT /api/bin
+ENTRYPOINT /api/server_bin

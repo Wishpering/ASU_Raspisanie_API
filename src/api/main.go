@@ -6,122 +6,123 @@ import (
 	"github.com/valyala/fasthttp"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
-	"bytes"
-	"crypto/rand"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"time"
 )
 
-var (
-	db         Database
-	api_passwd []byte
-)
+var db Database
 
-func groups_endpoint(ctx *fasthttp.RequestCtx) {
+func ScheduleEndpoint(ctx *fasthttp.RequestCtx) {
 	var (
-		json_obj           []uint8
-		err                error
+		ResultJson         []uint8
 		strContentType     = []byte("Content-Type")
 		strApplicationJSON = []byte("application/json")
 	)
 
-	auth := string(ctx.Request.Header.Peek("Authorization"))
-
-	if resp, err := db.CheckToken(auth); err != nil {
-		ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
-	} else if resp != 1 {
-		ctx.Response.SetStatusCode(401)
-		return
-	}
-
-	faculty := string(ctx.QueryArgs().Peek("faculty"))
-	if faculty == "" {
+	Faculty := string(ctx.QueryArgs().Peek("faculty"))
+	if Faculty == "" {
 		ctx.Response.SetStatusCode(400)
 		return
 	}
 
-	group_id := string(ctx.QueryArgs().Peek("id"))
-	if group_id == "" {
+	GroupID := string(ctx.QueryArgs().Peek("id"))
+	if GroupID == "" {
 		ctx.Response.SetStatusCode(400)
 		return
 	}
 
-	rasp, err := db.Search(faculty, group_id)
-	if err != nil {
-		ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
-	}
+	InputDate := string(ctx.QueryArgs().Peek("date"))
+	InputEndDate := string(ctx.QueryArgs().Peek("end_date"))
 
-	date := string(ctx.QueryArgs().Peek("date"))
-	end_date := string(ctx.QueryArgs().Peek("end_date"))
-
-	if date == "" && end_date == "" {
-		json_obj, err = json.Marshal(rasp)
+	if InputDate == "" && InputEndDate == "" {
+		rasp, err := db.GetScheduleByDate(
+			Faculty, GroupID,
+			time.Now().Format("2006-01-02"),
+		)
 		if err != nil {
 			ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
 		}
-	} else if date != "" && end_date == "" {
-		date_parsed, err := time.Parse("2006-01-02", date)
+
+		if RawJson, err := json.Marshal(rasp); err != nil {
+			ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
+		} else {
+			ResultJson = RawJson
+		}
+	} else if InputDate != "" && InputEndDate == "" {
+		ParsedDate, err := time.Parse("2006-01-02", InputDate)
 		if err != nil {
 			ctx.Response.SetStatusCode(400)
 			return
 		}
 
-		date_parsed = date_parsed.In(time.Local)
+		ParsedDate = ParsedDate.In(time.Local)
 
-		if tmp := rasp[date_parsed.Format("2006-01-02")]; tmp != nil {
-			json_obj, err = json.Marshal(tmp)
-			if err != nil {
+		if rasp, err := db.GetScheduleByDate(
+			Faculty, GroupID,
+			ParsedDate.Format("2006-01-02"),
+		); err != nil {
+			ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
+		} else {
+			if RawJson, err := json.Marshal(rasp); err != nil {
 				ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
+			} else {
+				ResultJson = RawJson
 			}
-		} else {
-			ctx.Response.SetStatusCode(404)
-			return
 		}
-	} else if (date != "" && end_date != "") || (date == "" && end_date != "") {
-		var date_parsed time.Time
+	} else if (InputDate != "" && InputEndDate != "") || (InputDate == "" && InputEndDate != "") {
+		var Date time.Time
 
-		if date == "" {
-			t := time.Now()
-			date_parsed = time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+		if InputDate == "" {
+			TimeNow := time.Now()
+			Date = time.Date(
+				TimeNow.Year(), TimeNow.Month(), TimeNow.Day(),
+				0, 0, 0, 0,
+				TimeNow.Location(),
+			)
 		} else {
-			if t, err := time.Parse("2006-01-02", date); err != nil {
+			if ParsedDate, err := time.Parse("2006-01-02", InputDate); err != nil {
 				ctx.Response.SetStatusCode(400)
 				return
 			} else {
-				date_parsed = t
+				Date = ParsedDate
 			}
 		}
 
-		end_parsed, err := time.Parse("2006-01-02", end_date)
+		ParsedEndDate, err := time.Parse("2006-01-02", InputEndDate)
 		if err != nil {
 			ctx.Response.SetStatusCode(400)
 			return
 		}
 
-		date_parsed = date_parsed.In(time.Local)
-		end_parsed = end_parsed.In(time.Local)
+		Date = Date.In(time.Local)
+		ParsedEndDate = ParsedEndDate.In(time.Local)
 
-		res := make(map[string]primitive.M)
+		var buffer []primitive.M
 
-		for date_parsed := date_parsed; date_parsed.After(end_parsed) == false; date_parsed = date_parsed.AddDate(0, 0, 1) {
-			d_now := date_parsed.Format("2006-01-02")
+		for Date := Date; Date.After(ParsedEndDate) == false; Date = Date.AddDate(0, 0, 1) {
+			StringDate := Date.Format("2006-01-02")
 
-			if tmp := rasp[d_now]; tmp != nil {
-				res[d_now] = tmp.(primitive.M)
+			if DaySchedule, err := db.GetScheduleByDate(Faculty, GroupID, StringDate); err != nil {
+				ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
+			} else {
+				if DaySchedule != nil {
+					buffer = append(buffer, DaySchedule)
+				}
 			}
 		}
 
-		json_obj, err = json.Marshal(res)
-		if err != nil {
+		if RawJson, err := json.Marshal(buffer); err != nil {
 			ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
+		} else {
+			ResultJson = RawJson
 		}
 	}
 
 	ctx.Response.Header.SetCanonical(strContentType, strApplicationJSON)
 	ctx.Response.SetStatusCode(200)
-	ctx.SetBodyString(string(json_obj))
+	ctx.SetBody(ResultJson)
 }
 
 func groups_pool_endpoint(ctx *fasthttp.RequestCtx) {
@@ -129,14 +130,6 @@ func groups_pool_endpoint(ctx *fasthttp.RequestCtx) {
 		strContentType     = []byte("Content-Type")
 		strApplicationJSON = []byte("application/json")
 	)
-
-	auth := string(ctx.Request.Header.Peek("Authorization"))
-	if resp, err := db.CheckToken(auth); err != nil {
-		ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
-	} else if resp != 1 {
-		ctx.Response.SetStatusCode(401)
-		return
-	}
 
 	tmp, err := db.Pool()
 	if err != nil {
@@ -150,69 +143,15 @@ func groups_pool_endpoint(ctx *fasthttp.RequestCtx) {
 
 	ctx.Response.Header.SetCanonical(strContentType, strApplicationJSON)
 	ctx.Response.SetStatusCode(200)
-	ctx.SetBodyString(string(json_obj))
+	ctx.SetBody(json_obj)
 }
 
-func token_endpoint(ctx *fasthttp.RequestCtx) {
-	auth := ctx.Request.Header.Peek("Authorization")
-	if !bytes.Equal(auth, api_passwd) {
-		ctx.Response.SetStatusCode(401)
-		return
-	} else {
-		var (
-			token              string
-			strContentType     = []byte("Content-Type")
-			strApplicationJSON = []byte("application/json")
-		)
-
-		tmp := make([]byte, 10)
-
-		for {
-			_, err := rand.Read(tmp)
-			if err != nil {
-				ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
-			}
-
-			token = fmt.Sprintf("%x", tmp)
-
-			if resp, err := db.InsertToken(token); err != nil {
-				ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
-				break
-			} else if resp == 1 {
-				break
-			}
-		}
-
-		json_obj, err := json.Marshal(Token{token})
-		if err != nil {
-			ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
-		}
-
-		ctx.Response.Header.SetCanonical(strContentType, strApplicationJSON)
-		ctx.Response.SetStatusCode(200)
-		ctx.SetBodyString(string(json_obj))
-	}
-}
-
-func token_check_endpoint(ctx *fasthttp.RequestCtx) {
-	auth := string(ctx.Request.Header.Peek("Authorization"))
-
-	if resp, err := db.CheckToken(auth); err != nil {
-		ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
-	} else if resp == 1 {
-		ctx.Response.SetStatusCode(200)
-	} else if resp == -1 {
-		ctx.Response.SetStatusCode(401)
-	}
-}
-
-func test_endpoint(ctx *fasthttp.RequestCtx) {
+func TestEndpoint(ctx *fasthttp.RequestCtx) {
 	ctx.SetContentType("text/plain; charset=utf8")
 	ctx.SetBodyString("Nothing here, but it's ok")
 }
 
 func main() {
-	password_for_token := flag.String("passwd", "", "password for token generation")
 	api_port := flag.String("port", ":8080", "Port in format ':PORT'")
 	api_compress := flag.Bool("compress", false, "On/of compression")
 	db_address := flag.String("db-address", "localhost", "MongoDB address")
@@ -221,26 +160,22 @@ func main() {
 	flag.Parse()
 
 	cfg := Configuration{
-		Password:   []byte(*password_for_token),
 		Port:       *api_port,
 		Compress:   *api_compress,
 		DB_address: *db_address,
 		DB_port:    *db_port,
 	}
 
-	api_passwd = cfg.Password
-
-	if db_conn, err := db_init(cfg.DB_address, cfg.DB_port); err != nil {
+	if db_conn, err := InitDB(cfg.DB_address, cfg.DB_port); err != nil {
 		panic(fmt.Sprintf("%s", "Can't open connection to db, error - %s", err))
 	} else {
 		db = db_conn
 	}
+	defer db.Close()
 
 	router := router.New()
-	router.GET("/test", test_endpoint)
-	router.GET("/token", token_endpoint)
-	router.GET("/token/check", token_check_endpoint)
-	router.GET("/rasp", groups_endpoint)
+	router.GET("/test", TestEndpoint)
+	router.GET("/rasp", ScheduleEndpoint)
 	router.GET("/pool", groups_pool_endpoint)
 
 	handler := fasthttplogger.Combined(router.Handler)
@@ -249,14 +184,6 @@ func main() {
 	}
 
 	if err := fasthttp.ListenAndServe(cfg.Port, handler); err != nil {
-		if err := db.Close(); err != nil {
-			fmt.Printf("%s", "Can't close connection to db, error - %s", err)
-		}
-
 		panic(fmt.Sprintf("Error in ListenAndServe: %s", err))
-	}
-
-	if err := db.Close(); err != nil {
-		fmt.Printf("%s", "Can't close connection to db, error - %s", err)
 	}
 }

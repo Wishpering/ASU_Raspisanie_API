@@ -30,7 +30,7 @@ services:
           - /bin/sh
           - -c
           - |
-           /api/bin --db-address $DB_ADDRESS --db-port $DB_PORT --port :8080 --passwd $API_PASSWD --compress
+           /api/server_bin --db-address $DB_ADDRESS --db-port $DB_PORT --port :8080 --compress
 
       links:
           - database
