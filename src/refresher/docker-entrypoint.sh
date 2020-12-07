@@ -4,7 +4,7 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-REFRESH_RATE=25600
+REFRESH_RATE=259200
 
 while true; do
     /api/refresher_bin -db-address database
