@@ -12,6 +12,11 @@ import (
 	"time"
 )
 
+const (
+	ContentTypeStr = "text/plain; charset=utf8"
+	TestResponse  = "Nothing here, but it's ok"
+)
+
 var db Database
 
 func ScheduleEndpoint(ctx *fasthttp.RequestCtx) {
@@ -125,48 +130,40 @@ func ScheduleEndpoint(ctx *fasthttp.RequestCtx) {
 	ctx.SetBody(ResultJson)
 }
 
-func groups_pool_endpoint(ctx *fasthttp.RequestCtx) {
+func PoolEndpoint(ctx *fasthttp.RequestCtx) {
 	var (
 		strContentType     = []byte("Content-Type")
 		strApplicationJSON = []byte("application/json")
 	)
 
-	tmp, err := db.Pool()
-	if err != nil {
+	if tmp, err := db.Pool(); err != nil {
 		ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
-	}
+	} else {
+		json_obj, err := json.Marshal(FacultiesPool{len(tmp), tmp})
+		if err != nil {
+			ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
+		}
 
-	json_obj, err := json.Marshal(Pool{len(tmp), tmp})
-	if err != nil {
-		ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
+		ctx.Response.Header.SetCanonical(strContentType, strApplicationJSON)
+		ctx.Response.SetStatusCode(200)
+		ctx.SetBody(json_obj)
 	}
-
-	ctx.Response.Header.SetCanonical(strContentType, strApplicationJSON)
-	ctx.Response.SetStatusCode(200)
-	ctx.SetBody(json_obj)
 }
 
 func TestEndpoint(ctx *fasthttp.RequestCtx) {
-	ctx.SetContentType("text/plain; charset=utf8")
-	ctx.SetBodyString("Nothing here, but it's ok")
+	ctx.SetContentType(ContentTypeStr)
+	ctx.SetBodyString(TestResponse)
 }
 
 func main() {
-	api_port := flag.String("port", ":8080", "Port in format ':PORT'")
-	api_compress := flag.Bool("compress", false, "On/of compression")
-	db_address := flag.String("db-address", "localhost", "MongoDB address")
-	db_port := flag.String("db-port", "27017", "MongoDB port")
+	Port := flag.String("port", ":8080", "Port in format ':PORT'")
+	Compress := flag.Bool("compress", false, "On/of compression")
+	DbAddress := flag.String("db-address", "localhost", "MongoDB address")
+	DbPort := flag.String("db-port", "27017", "MongoDB port")
 
 	flag.Parse()
 
-	cfg := Configuration{
-		Port:       *api_port,
-		Compress:   *api_compress,
-		DB_address: *db_address,
-		DB_port:    *db_port,
-	}
-
-	if db_conn, err := InitDB(cfg.DB_address, cfg.DB_port); err != nil {
+	if db_conn, err := InitDB(*DbAddress, *DbPort); err != nil {
 		panic(fmt.Sprintf("%s", "Can't open connection to db, error - %s", err))
 	} else {
 		db = db_conn
@@ -174,16 +171,16 @@ func main() {
 	defer db.Close()
 
 	router := router.New()
-	router.GET("/test", TestEndpoint)
-	router.GET("/rasp", ScheduleEndpoint)
-	router.GET("/pool", groups_pool_endpoint)
+	router.GET("/v1/test", TestEndpoint)
+	router.GET("/v1/rasp", ScheduleEndpoint)
+	router.GET("/v1/pool", PoolEndpoint)
 
 	handler := fasthttplogger.Combined(router.Handler)
-	if cfg.Compress {
+	if *Compress {
 		handler = fasthttp.CompressHandler(handler)
 	}
 
-	if err := fasthttp.ListenAndServe(cfg.Port, handler); err != nil {
+	if err := fasthttp.ListenAndServe(*Port, handler); err != nil {
 		panic(fmt.Sprintf("Error in ListenAndServe: %s", err))
 	}
 }

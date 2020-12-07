@@ -63,7 +63,7 @@ func (group *Group) GetRasp(Collector *colly.Collector, FacultyID int) (map[stri
 				} else if TdNum == 3 {
 					para.Prepod = text
 				} else if TdNum == 4 {
-					para.Auditoriya = text
+					para.Place = text
 				} else {
 					return
 				}

@@ -15,7 +15,7 @@ type Para struct {
 	Time       string `json:"time"`
 	Name       string `json:"name"`
 	Prepod     string `json:"prepod"`
-	Auditoriya string `json:"auditoriya"`
+	Place string `json:"place"`
 }
 
 type MongoSchedule struct {

@@ -1,13 +1,16 @@
 package main
 
-type Pool struct {
-	Count   int                 `json:"count"`
-	Payload map[string][]string `json:"payload"`
+type GroupsPool struct {
+	Count  int      `json:"count"`
+	Groups []string `json:"list"`
+}
+	
+type Faculty struct {
+	Name   string   `json:"name"`
+	Groups GroupsPool `json:"groups"`
 }
 
-type Configuration struct {
-	Port       string
-	Compress   bool
-	DB_address string
-	DB_port    string
+type FacultiesPool struct {
+	Count     int       `json:"count"`
+	Faculties []Faculty `json:"faculties"`
 }
