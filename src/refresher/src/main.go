@@ -123,7 +123,7 @@ func (faculty *Faculty) GetAllGroups(Collector *colly.Collector) {
 					fmt.Println("skipping ", name)
 					return
 				}
-				
+
 				for _, ignore := range IgnoreGroups {
 					if strings.Contains(
 						strings.ToLower(name),
@@ -132,7 +132,7 @@ func (faculty *Faculty) GetAllGroups(Collector *colly.Collector) {
 						return
 					}
 				}
-				
+
 				faculty.Groups = append(faculty.Groups, Group{id, name})
 			}
 		}
@@ -188,8 +188,8 @@ func GetAllFaculties(Collector *colly.Collector) []Faculty {
 }
 
 func main() {
-	db_address := flag.String("db-address", "localhost", "MongoDB address")
-	db_port := flag.String("db-port", "27017", "MongoDB port")
+	DbAddress := flag.String("db-address", "localhost", "MongoDB address")
+	DbPort := flag.String("db-port", "27017", "MongoDB port")
 	flag.Parse()
 
 	Collector := colly.NewCollector(
@@ -204,7 +204,7 @@ func main() {
 
 	extensions.RandomUserAgent(Collector)
 
-	if DbLink, err := DbInit(DatabaseOptions{*db_address, *db_port}); err != nil {
+	if DbLink, err := DbInit(DatabaseOptions{*DbAddress, *DbPort}); err != nil {
 		panic(err)
 	} else {
 		db = DbLink

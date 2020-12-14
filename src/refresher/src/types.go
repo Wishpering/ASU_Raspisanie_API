@@ -12,10 +12,10 @@ type Faculty struct {
 }
 
 type Para struct {
-	Time       string `json:"time"`
-	Name       string `json:"name"`
-	Prepod     string `json:"prepod"`
-	Place string `json:"place"`
+	Time   string `json:"time"`
+	Name   string `json:"name"`
+	Prepod string `json:"prepod"`
+	Place  string `json:"place"`
 }
 
 type MongoSchedule struct {
